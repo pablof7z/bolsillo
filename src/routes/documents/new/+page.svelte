@@ -1,15 +1,46 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { untrack } from 'svelte';
+	import { NDKKind } from '@nostr-dev-kit/ndk';
 	import { ndk } from '$lib/ndk';
 	import { createDocument } from '$lib/documents.svelte';
+	import { getAdapter, type KindAdapter } from '$lib/adapters';
+	import { SUGGESTED_KINDS, isReplaceableKind, isEphemeralKind } from '$lib/kind-labels';
 
-	let title = $state('');
-	let content = $state('');
+	let selectedKind = $state(NDKKind.Article as number);
+	let customKind = $state('');
+	let showCustomKind = $state(false);
+	let fields = $state<Record<string, string>>({});
 	let authorsInput = $state('');
 	let showAuthors = $state(false);
 	let loading = $state(false);
 	let error = $state('');
 	let skippedWarning = $state('');
+
+	const adapter: KindAdapter = $derived(getAdapter(selectedKind));
+
+	/** Warning text shown when the user picks a problematic kind range */
+	const kindWarning = $derived.by(() => {
+		if (isEphemeralKind(selectedKind)) {
+			return 'Ephemeral events (20000–29999) are not persisted by relays. Collaborative documents require persistence — this kind will likely not work.';
+		}
+		if (isReplaceableKind(selectedKind)) {
+			return 'Replaceable events (10000–19999) share a single slot per author+kind. Every edit will overwrite ALL documents of this kind by the same author.';
+		}
+		return '';
+	});
+
+	// Reset fields when the adapter (i.e. selectedKind) changes.
+	// Use untrack to read `fields` without creating a self-dependency.
+	$effect(() => {
+		const currentFields = adapter.editorFields;
+		const prev = untrack(() => fields);
+		const newFields: Record<string, string> = {};
+		for (const field of currentFields) {
+			newFields[field.key] = prev[field.key] ?? '';
+		}
+		fields = newFields;
+	});
 
 	$effect(() => {
 		if (!ndk.$currentPubkey) {
@@ -17,12 +48,27 @@
 		}
 	});
 
+	function selectKind(kind: number) {
+		selectedKind = kind;
+		showCustomKind = false;
+	}
+
+	function applyCustomKind() {
+		const n = parseInt(customKind, 10);
+		if (!isNaN(n) && n >= 0) {
+			selectedKind = n;
+		}
+	}
+
 	async function handleCreate(e: Event) {
 		e.preventDefault();
 
-		if (!title.trim()) {
-			error = 'Please enter a title';
-			return;
+		// Validate required fields
+		for (const field of adapter.editorFields) {
+			if (field.required && !fields[field.key]?.trim()) {
+				error = `Please enter a ${field.label.toLowerCase()}`;
+				return;
+			}
 		}
 
 		loading = true;
@@ -35,10 +81,9 @@
 				.map((a) => a.trim())
 				.filter(Boolean);
 
-			const result = await createDocument(title.trim(), content, additionalAuthors);
+			const result = await createDocument(selectedKind, fields, additionalAuthors);
 
 			if (result.skippedAuthors.length > 0) {
-				// Brief delay so the user can see the warning before navigating
 				skippedWarning = `Skipped invalid collaborator${result.skippedAuthors.length > 1 ? 's' : ''}: ${result.skippedAuthors.join(', ')}`;
 				await new Promise((r) => setTimeout(r, 2500));
 			}
@@ -66,7 +111,7 @@
 			<button
 				type="submit"
 				form="create-form"
-				disabled={loading || !title.trim()}
+				disabled={loading}
 				class="btn-primary text-sm"
 			>
 				{#if loading}
@@ -78,7 +123,7 @@
 						Publishing…
 					</span>
 				{:else}
-					Create document
+					Create {adapter.label.toLowerCase()}
 				{/if}
 			</button>
 		</div>
@@ -101,36 +146,111 @@
 				</div>
 			{/if}
 
-			<form id="create-form" onsubmit={handleCreate} class="space-y-6">
-				<!-- Title -->
-				<div>
-					<label for="title" class="block text-sm font-medium text-zinc-400 mb-2">Title</label>
-					<input
-						id="title"
-						type="text"
-						bind:value={title}
-						placeholder="Untitled document"
-						class="input text-lg"
-						disabled={loading}
-						autofocus
-					/>
+			<!-- Kind Picker -->
+			<div class="mb-8">
+				<label class="block text-sm font-medium text-zinc-400 mb-3">Event Kind</label>
+				<div class="flex flex-wrap gap-2">
+					{#each SUGGESTED_KINDS as sk (sk.kind)}
+						<button
+							type="button"
+							onclick={() => selectKind(sk.kind)}
+							class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all
+								{selectedKind === sk.kind && !showCustomKind
+									? 'bg-violet-500/20 border border-violet-500/40 text-violet-300'
+									: 'bg-zinc-800/50 border border-zinc-700/50 text-zinc-400 hover:text-zinc-300 hover:border-zinc-600'}"
+						>
+							<span>{sk.icon}</span>
+							<span>{sk.label}</span>
+							<span class="text-[10px] text-zinc-600">({sk.kind})</span>
+						</button>
+					{/each}
+
+					<button
+						type="button"
+						onclick={() => { showCustomKind = !showCustomKind; }}
+						class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all
+							{showCustomKind
+								? 'bg-violet-500/20 border border-violet-500/40 text-violet-300'
+								: 'bg-zinc-800/50 border border-zinc-700/50 text-zinc-400 hover:text-zinc-300 hover:border-zinc-600'}"
+					>
+						<span>🔢</span>
+						<span>Custom</span>
+					</button>
 				</div>
 
-				<!-- Content -->
-				<div>
-					<label for="content" class="block text-sm font-medium text-zinc-400 mb-2">
-						Content
-						<span class="text-zinc-600 font-normal ml-1">— Markdown supported</span>
-					</label>
-					<textarea
-						id="content"
-						bind:value={content}
-						placeholder="Start writing…"
-						rows={16}
-						class="input font-mono text-sm leading-relaxed resize-none"
-						disabled={loading}
-					></textarea>
-				</div>
+				{#if showCustomKind}
+					<div class="mt-3 flex items-center gap-2 animate-fade-in">
+						<input
+							type="number"
+							bind:value={customKind}
+							placeholder="Kind number (e.g. 1, 30023)"
+							class="input font-mono text-sm w-48"
+							min="0"
+							oninput={applyCustomKind}
+						/>
+						<span class="text-xs text-zinc-500">
+							{adapter.icon} {adapter.label}
+						</span>
+					</div>
+				{/if}
+
+				{#if kindWarning}
+					<div class="mt-3 bg-amber-500/10 border border-amber-500/20 text-amber-400 px-4 py-3 rounded-lg text-sm animate-fade-in">
+						⚠️ {kindWarning}
+					</div>
+				{/if}
+			</div>
+
+			<form id="create-form" onsubmit={handleCreate} class="space-y-6">
+				<!-- Dynamic editor fields from the adapter -->
+				{#each adapter.editorFields as field (field.key)}
+					<div>
+						<label for="field-{field.key}" class="block text-sm font-medium text-zinc-400 mb-2">
+							{field.label}
+							{#if !field.required}
+								<span class="text-zinc-600 font-normal ml-1">— optional</span>
+							{/if}
+						</label>
+
+						{#if field.type === 'text'}
+							<input
+								id="field-{field.key}"
+								type="text"
+								bind:value={fields[field.key]}
+								placeholder={field.placeholder}
+								class="input text-lg"
+								disabled={loading}
+							/>
+						{:else if field.type === 'textarea'}
+							<textarea
+								id="field-{field.key}"
+								bind:value={fields[field.key]}
+								placeholder={field.placeholder}
+								rows={16}
+								class="input font-mono text-sm leading-relaxed resize-none"
+								disabled={loading}
+							></textarea>
+						{:else if field.type === 'json'}
+							<textarea
+								id="field-{field.key}"
+								bind:value={fields[field.key]}
+								placeholder={field.placeholder}
+								rows={6}
+								class="input font-mono text-sm leading-relaxed resize-none"
+								disabled={loading}
+							></textarea>
+						{:else if field.type === 'number'}
+							<input
+								id="field-{field.key}"
+								type="number"
+								bind:value={fields[field.key]}
+								placeholder={field.placeholder}
+								class="input text-sm font-mono"
+								disabled={loading}
+							/>
+						{/if}
+					</div>
+				{/each}
 
 				<!-- Additional Authors -->
 				<div>

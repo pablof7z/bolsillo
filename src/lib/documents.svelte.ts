@@ -1,12 +1,14 @@
 import {
-	NDKArticle,
 	NDKCollaborativeEvent,
 	NDKEvent,
 	NDKKind
 } from '@nostr-dev-kit/ndk';
 import { nip19 } from 'nostr-tools';
 import { ndk } from './ndk';
+import { getAdapter } from './adapters';
 import { generateDocId } from './utils';
+
+// ── Types ─────────────────────────────────────────────────────
 
 export interface DocListItem {
 	/** Composite identity: `pubkey:dTag` to avoid collisions across authors */
@@ -15,6 +17,8 @@ export interface DocListItem {
 	authorCount: number;
 	updatedAt: number;
 	naddr: string;
+	/** The target event kind */
+	targetKind: number;
 }
 
 export interface DocVersion {
@@ -25,50 +29,53 @@ export interface DocVersion {
 	timestamp: number;
 }
 
+// ── Doc list building ─────────────────────────────────────────
+
 /**
- * Convert collab events + article events into a sorted DocListItem array.
+ * Convert collab pointer events + target events into a sorted DocListItem array.
  * Pure function — no fetching.
  */
 export function collabEventsToDocList(
-	collabEvents: NDKEvent[],
-	articleEvents: NDKEvent[]
+	pointerEvents: NDKEvent[],
+	targetEvents: NDKEvent[]
 ): DocListItem[] {
-	// Build article lookup: dTag -> newest article
-	const articleByDTag = new Map<string, NDKEvent>();
-	for (const event of articleEvents) {
+	// Build target lookup: dTag -> newest event
+	const targetByDTag = new Map<string, NDKEvent>();
+	for (const event of targetEvents) {
 		const dTag = event.tagValue('d');
 		if (!dTag) continue;
-		const existing = articleByDTag.get(dTag);
+		const existing = targetByDTag.get(dTag);
 		if (!existing || (event.created_at || 0) > (existing.created_at || 0)) {
-			articleByDTag.set(dTag, event);
+			targetByDTag.set(dTag, event);
 		}
 	}
 
-	// Deduplicate collab events by pubkey:dTag (keep newest)
-	const collabByKey = new Map<string, NDKEvent>();
-	for (const event of collabEvents) {
+	// Deduplicate pointer events by pubkey:dTag (keep newest)
+	const pointerByKey = new Map<string, NDKEvent>();
+	for (const event of pointerEvents) {
 		const dTag = event.tagValue('d');
 		if (!dTag) continue;
 		const key = `${event.pubkey}:${dTag}`;
-		const existing = collabByKey.get(key);
+		const existing = pointerByKey.get(key);
 		if (!existing || (event.created_at || 0) > (existing.created_at || 0)) {
-			collabByKey.set(key, event);
+			pointerByKey.set(key, event);
 		}
 	}
 
 	const docs: DocListItem[] = [];
-	for (const [compositeKey, event] of collabByKey) {
+	for (const [compositeKey, event] of pointerByKey) {
 		const collab = NDKCollaborativeEvent.from(event);
 		const dTag = collab.dTag || '';
+		const targetKind = collab.targetKind ?? NDKKind.Article;
+		const adapter = getAdapter(targetKind);
 
-		const articleEvent = articleByDTag.get(dTag);
+		const targetEvent = targetByDTag.get(dTag);
 		let title = dTag;
 		let updatedAt = event.created_at || 0;
 
-		if (articleEvent && articleEvent.kind === NDKKind.Article) {
-			const article = NDKArticle.from(articleEvent);
-			title = article.title || dTag;
-			updatedAt = articleEvent.created_at || updatedAt;
+		if (targetEvent) {
+			title = adapter.getTitle(targetEvent);
+			updatedAt = targetEvent.created_at || updatedAt;
 		}
 
 		const naddrData: nip19.AddressPointer = {
@@ -83,7 +90,8 @@ export function collabEventsToDocList(
 			title,
 			authorCount: collab.authorPubkeys.length || 1,
 			updatedAt,
-			naddr: nip19.naddrEncode(naddrData)
+			naddr: nip19.naddrEncode(naddrData),
+			targetKind
 		});
 	}
 
@@ -91,25 +99,21 @@ export function collabEventsToDocList(
 	return docs;
 }
 
-/** Convert an NDKEvent to a DocVersion */
+// ── Version helpers ───────────────────────────────────────────
+
+/** Convert an NDKEvent to a DocVersion using the appropriate adapter */
 export function eventToVersion(event: NDKEvent): DocVersion | null {
 	try {
-		if (event.kind === NDKKind.Article) {
-			const article = NDKArticle.from(event);
-			return {
-				eventId: event.id || '',
-				author: event.pubkey,
-				title: article.title || 'Untitled',
-				content: article.content || '',
-				timestamp: event.created_at || 0
-			};
+		if (event.kind == null) {
+			console.warn('eventToVersion: event has no kind, skipping');
+			return null;
 		}
-
+		const adapter = getAdapter(event.kind);
 		return {
 			eventId: event.id || '',
 			author: event.pubkey,
-			title: 'Untitled',
-			content: event.content || '',
+			title: adapter.getTitle(event),
+			content: adapter.getContent(event),
 			timestamp: event.created_at || 0
 		};
 	} catch (e) {
@@ -118,11 +122,12 @@ export function eventToVersion(event: NDKEvent): DocVersion | null {
 	}
 }
 
+// ── Publish ───────────────────────────────────────────────────
+
 /** Publish an update to a collaborative document */
 export async function publishUpdate(
 	collab: NDKCollaborativeEvent,
-	title: string,
-	content: string
+	fields: Record<string, string>
 ): Promise<DocVersion> {
 	const pubkey = ndk.$currentPubkey;
 	if (!pubkey) throw new Error('Not authenticated');
@@ -130,21 +135,29 @@ export async function publishUpdate(
 	const isAuthor = collab.authorPubkeys.includes(pubkey);
 	if (!isAuthor) throw new Error('You are not an authorized author of this document');
 
-	const article = new NDKArticle(ndk);
-	article.dTag = collab.dTag || '';
-	article.title = title;
-	article.content = content;
+	const targetKind = collab.targetKind ?? NDKKind.Article;
+	const adapter = getAdapter(targetKind);
+	if (!adapter) {
+		throw new Error(`No adapter available for kind ${targetKind}`);
+	}
+	const event = adapter.createEvent(ndk, collab.dTag || '', fields);
 
-	await article.publishReplaceable(undefined, undefined, 0);
+	// Add the back-reference to the pointer
+	const pointerAddr = `${NDKKind.CollaborativeEvent}:${collab.pubkey}:${collab.dTag}`;
+	event.tags.push(['a', pointerAddr]);
+
+	await adapter.publishEvent(event);
 
 	return {
-		eventId: article.id || '',
+		eventId: event.id || '',
 		author: pubkey,
-		title,
-		content,
+		title: adapter.getTitle(event),
+		content: adapter.getContent(event),
 		timestamp: Math.floor(Date.now() / 1000)
 	};
 }
+
+// ── Create ────────────────────────────────────────────────────
 
 export interface CreateDocumentResult {
 	naddr: string;
@@ -152,56 +165,43 @@ export interface CreateDocumentResult {
 }
 
 /**
- * Create a new collaborative document
+ * Create a new collaborative document of any kind.
  */
 export async function createDocument(
-	title: string,
-	content: string,
+	targetKind: number,
+	fields: Record<string, string>,
 	additionalAuthors: string[] = []
 ): Promise<CreateDocumentResult> {
 	const pubkey = ndk.$currentPubkey;
-	if (!pubkey) {
-		throw new Error('Not authenticated');
-	}
+	if (!pubkey) throw new Error('Not authenticated');
 
 	const signer = ndk.signer!;
 	const user = await signer.user();
-
-	// Create the article but don't publish yet — we need the collab pointer first
-	// so we can add the backlink before the first publish.
-	const article = new NDKArticle(ndk);
-	article.title = title;
-	article.content = content;
-	article.dTag = generateDocId();
+	const dTag = generateDocId();
 
 	// Build the collaborative pointer
 	const collab = new NDKCollaborativeEvent(ndk);
-	collab.dTag = article.dTag;
-	collab.targetKind = article.kind;
+	collab.dTag = dTag;
+	collab.targetKind = targetKind;
 	collab.authors.push(user);
 
 	const skippedAuthors: string[] = [];
 	for (const pubkeyOrNpub of additionalAuthors) {
 		let pk = pubkeyOrNpub.trim();
 		if (!pk) continue;
-
 		try {
 			if (pk.startsWith('npub1')) {
 				const decoded = nip19.decode(pk);
-				if (decoded.type === 'npub') {
-					pk = decoded.data as string;
-				}
+				if (decoded.type === 'npub') pk = decoded.data as string;
 			}
-
 			if (!/^[0-9a-f]{64}$/i.test(pk)) {
 				skippedAuthors.push(pubkeyOrNpub);
 				continue;
 			}
-
 			if (!collab.authorPubkeys.includes(pk)) {
 				collab.authors.push(ndk.getUser({ pubkey: pk }));
 			}
-		} catch (e) {
+		} catch {
 			skippedAuthors.push(pubkeyOrNpub);
 		}
 	}
@@ -212,20 +212,36 @@ export async function createDocument(
 
 	await collab.sign(signer);
 
-	// Publish the collab pointer using NDKEvent.prototype.publish directly
-	// to bypass NDKCollaborativeEvent's overridden publish behavior.
+	/*
+	 * WORKAROUND: NDKCollaborativeEvent.publish() override
+	 *
+	 * NDKCollaborativeEvent overrides the publish() method to broadcast
+	 * updates to the *target* event rather than publishing the pointer
+	 * event itself.  We need to publish the raw pointer (kind 34235) as a
+	 * regular replaceable event, so we bypass the override by calling
+	 * NDKEvent.prototype.publish directly on the collab instance.
+	 *
+	 * Applies to: NDK v3.x (ndk-svelte / @nostr-dev-kit/ndk)
+	 * Remove when: NDKCollaborativeEvent exposes a dedicated
+	 *   `publishPointer()` method or the override is refactored.
+	 */
 	await NDKEvent.prototype.publish.call(collab, undefined, undefined, 0);
 
-	// Now add the backlink to the article and publish it once
-	// publishReplaceable handles signing, so no need to sign separately
-	const pointerAddress = `${NDKKind.CollaborativeEvent}:${collab.pubkey}:${collab.dTag}`;
-	article.tags.push(['a', pointerAddress]);
-	await article.publishReplaceable(undefined, undefined, 0);
+	// Build and publish the initial target event
+	const adapter = getAdapter(targetKind);
+	if (!adapter) {
+		throw new Error(`No adapter available for kind ${targetKind}`);
+	}
+	const targetEvent = adapter.createEvent(ndk, dTag, fields);
+	const pointerAddr = `${NDKKind.CollaborativeEvent}:${collab.pubkey}:${collab.dTag}`;
+	targetEvent.tags.push(['a', pointerAddr]);
+	await adapter.publishEvent(targetEvent);
 
+	// Encode the pointer naddr for navigation
 	const naddrData: nip19.AddressPointer = {
 		kind: NDKKind.CollaborativeEvent,
 		pubkey: collab.pubkey,
-		identifier: collab.dTag || '',
+		identifier: dTag,
 		relays: ['wss://relay.damus.io', 'wss://nos.lol']
 	};
 

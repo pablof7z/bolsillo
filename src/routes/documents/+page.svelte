@@ -5,6 +5,7 @@
 	import { collabEventsToDocList } from '$lib/documents.svelte';
 	import { logout } from '$lib/state.svelte';
 	import { formatTimestamp } from '$lib/utils';
+	import { getAdapter } from '$lib/adapters';
 	import { User } from '$lib/components/ui';
 
 	// Redirect if not logged in
@@ -14,27 +15,29 @@
 		}
 	});
 
-	// Subscribe to ALL collab events (filter client-side for user's docs)
-	const collabSub = ndk.$subscribe(() => ({
+	// Subscribe to ALL collab pointer events (filter client-side for user's docs)
+	const pointerSub = ndk.$subscribe(() => ({
 		filters: [{ kinds: [NDKKind.CollaborativeEvent as number] }],
 		skipVerification: true
 	}));
 
-	// Subscribe to articles for title enrichment
-	const articleSub = ndk.$subscribe(() => {
-		if (collabSub.events.length === 0) return undefined;
+	// Subscribe to target events for title enrichment
+	const targetSub = ndk.$subscribe(() => {
+		if (pointerSub.events.length === 0) return undefined;
 		const authors = new Set<string>();
 		const dTags = new Set<string>();
-		for (const e of collabSub.events) {
+		const kinds = new Set<number>();
+		for (const e of pointerSub.events) {
 			try {
 				const c = NDKCollaborativeEvent.from(e);
 				if (c.dTag) dTags.add(c.dTag);
+				kinds.add(c.targetKind ?? NDKKind.Article);
 				for (const pk of c.authorPubkeys) authors.add(pk);
 			} catch {}
 		}
 		if (dTags.size === 0 || authors.size === 0) return undefined;
 		return {
-			filters: [{ kinds: [NDKKind.Article as number], authors: [...authors], '#d': [...dTags] }],
+			filters: [{ kinds: [...kinds], authors: [...authors], '#d': [...dTags] }],
 			skipVerification: true
 		};
 	});
@@ -43,10 +46,10 @@
 	const myDocuments = $derived.by(() => {
 		const pubkey = ndk.$currentPubkey;
 		if (!pubkey) return [];
-		const myCollabEvents = collabSub.events.filter(
+		const myPointerEvents = pointerSub.events.filter(
 			(e) => e.pubkey === pubkey || e.getMatchingTags('p').some((t) => t[1] === pubkey)
 		);
-		return collabEventsToDocList(myCollabEvents, articleSub.events);
+		return collabEventsToDocList(myPointerEvents, targetSub.events);
 	});
 </script>
 
@@ -92,12 +95,19 @@
 		{#if myDocuments.length > 0}
 			<div class="grid gap-3 animate-fade-in">
 				{#each myDocuments as doc (doc.naddr)}
+					{@const adapter = getAdapter(doc.targetKind)}
 					<a
 						href="/documents/{encodeURIComponent(doc.naddr)}"
 						class="card-interactive group p-5 block"
 					>
 						<div class="flex items-start justify-between gap-4">
 							<div class="min-w-0 flex-1">
+								<div class="flex items-center gap-2 mb-1">
+									<span class="text-xs" title={adapter.label}>{adapter.icon}</span>
+									<span class="text-[10px] font-medium text-zinc-500 bg-zinc-800/50 px-1.5 py-0.5 rounded">
+										{adapter.label}
+									</span>
+								</div>
 								<h3 class="text-base font-medium text-zinc-200 truncate group-hover:text-white transition-colors">
 									{doc.title}
 								</h3>
@@ -119,7 +129,7 @@
 					</a>
 				{/each}
 			</div>
-		{:else if !collabSub.eosed}
+		{:else if !pointerSub.eosed}
 			<div class="flex flex-col items-center justify-center py-24 animate-fade-in">
 				<div class="w-8 h-8 border-2 border-zinc-700 border-t-zinc-400 rounded-full animate-spin mb-4"></div>
 				<p class="text-zinc-500 text-sm">Fetching documents from relays…</p>
