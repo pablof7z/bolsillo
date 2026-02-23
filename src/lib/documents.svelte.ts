@@ -104,7 +104,11 @@ export function collabEventsToDocList(
 /** Convert an NDKEvent to a DocVersion using the appropriate adapter */
 export function eventToVersion(event: NDKEvent): DocVersion | null {
 	try {
-		const adapter = getAdapter(event.kind!);
+		if (event.kind == null) {
+			console.warn('eventToVersion: event has no kind, skipping');
+			return null;
+		}
+		const adapter = getAdapter(event.kind);
 		return {
 			eventId: event.id || '',
 			author: event.pubkey,
@@ -133,6 +137,9 @@ export async function publishUpdate(
 
 	const targetKind = collab.targetKind ?? NDKKind.Article;
 	const adapter = getAdapter(targetKind);
+	if (!adapter) {
+		throw new Error(`No adapter available for kind ${targetKind}`);
+	}
 	const event = adapter.createEvent(ndk, collab.dTag || '', fields);
 
 	// Add the back-reference to the pointer
@@ -205,12 +212,26 @@ export async function createDocument(
 
 	await collab.sign(signer);
 
-	// Publish the collab pointer using NDKEvent.prototype.publish directly
-	// to bypass NDKCollaborativeEvent's overridden publish behavior.
+	/*
+	 * WORKAROUND: NDKCollaborativeEvent.publish() override
+	 *
+	 * NDKCollaborativeEvent overrides the publish() method to broadcast
+	 * updates to the *target* event rather than publishing the pointer
+	 * event itself.  We need to publish the raw pointer (kind 34235) as a
+	 * regular replaceable event, so we bypass the override by calling
+	 * NDKEvent.prototype.publish directly on the collab instance.
+	 *
+	 * Applies to: NDK v3.x (ndk-svelte / @nostr-dev-kit/ndk)
+	 * Remove when: NDKCollaborativeEvent exposes a dedicated
+	 *   `publishPointer()` method or the override is refactored.
+	 */
 	await NDKEvent.prototype.publish.call(collab, undefined, undefined, 0);
 
 	// Build and publish the initial target event
 	const adapter = getAdapter(targetKind);
+	if (!adapter) {
+		throw new Error(`No adapter available for kind ${targetKind}`);
+	}
 	const targetEvent = adapter.createEvent(ndk, dTag, fields);
 	const pointerAddr = `${NDKKind.CollaborativeEvent}:${collab.pubkey}:${collab.dTag}`;
 	targetEvent.tags.push(['a', pointerAddr]);

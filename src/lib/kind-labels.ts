@@ -35,6 +35,16 @@ export function kindLabel(kind: number): string {
 	return `Kind ${kind}`;
 }
 
+/** Replaceable kinds (10000–19999) share one slot per author+kind — no d-tag identity. */
+export function isReplaceableKind(kind: number): boolean {
+	return kind >= 10000 && kind < 20000;
+}
+
+/** Ephemeral kinds (20000–29999) are not persisted by relays. */
+export function isEphemeralKind(kind: number): boolean {
+	return kind >= 20000 && kind < 30000;
+}
+
 /**
  * A curated list of kinds that are commonly used and make sense
  * to create collaboratively. Shown in the "quick pick" UI.

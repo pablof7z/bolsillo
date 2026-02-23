@@ -83,14 +83,29 @@
 	);
 	const isLive = $derived(collabSub.eosed && collab !== null);
 
+	/** Tags that are managed automatically and should not appear in the extra-tags editor. */
+	const SYSTEM_TAG_NAMES = new Set(['d', 'a', 'title', 'published_at']);
+
 	function startEditing() {
-		// Populate edit fields from current version using adapter field definitions
+		// Find the actual NDKEvent backing the current version so we can
+		// read its tags (DocVersion only stores title + content).
+		const latestEvent = currentVersion
+			? targetSub.events.find((e) => e.id === currentVersion.eventId)
+			: undefined;
+
 		const fields: Record<string, string> = {};
 		for (const field of adapter.editorFields) {
 			if (field.key === 'title') {
 				fields.title = currentVersion?.title ?? '';
 			} else if (field.key === 'content') {
 				fields.content = currentVersion?.content ?? '';
+			} else if (field.key === 'tags' && latestEvent) {
+				// Prefill custom tags from the existing event so edits
+				// don't silently drop them (fixes tag-merge issue).
+				const customTags = latestEvent.tags.filter(
+					(t) => !SYSTEM_TAG_NAMES.has(t[0])
+				);
+				fields.tags = customTags.length > 0 ? JSON.stringify(customTags) : '';
 			} else {
 				fields[field.key] = '';
 			}

@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { untrack } from 'svelte';
 	import { NDKKind } from '@nostr-dev-kit/ndk';
 	import { ndk } from '$lib/ndk';
 	import { createDocument } from '$lib/documents.svelte';
 	import { getAdapter, type KindAdapter } from '$lib/adapters';
-	import { SUGGESTED_KINDS } from '$lib/kind-labels';
+	import { SUGGESTED_KINDS, isReplaceableKind, isEphemeralKind } from '$lib/kind-labels';
 
 	let selectedKind = $state(NDKKind.Article as number);
 	let customKind = $state('');
@@ -18,11 +19,25 @@
 
 	const adapter: KindAdapter = $derived(getAdapter(selectedKind));
 
-	// Reset fields when kind changes
+	/** Warning text shown when the user picks a problematic kind range */
+	const kindWarning = $derived.by(() => {
+		if (isEphemeralKind(selectedKind)) {
+			return 'Ephemeral events (20000–29999) are not persisted by relays. Collaborative documents require persistence — this kind will likely not work.';
+		}
+		if (isReplaceableKind(selectedKind)) {
+			return 'Replaceable events (10000–19999) share a single slot per author+kind. Every edit will overwrite ALL documents of this kind by the same author.';
+		}
+		return '';
+	});
+
+	// Reset fields when the adapter (i.e. selectedKind) changes.
+	// Use untrack to read `fields` without creating a self-dependency.
 	$effect(() => {
+		const currentFields = adapter.editorFields;
+		const prev = untrack(() => fields);
 		const newFields: Record<string, string> = {};
-		for (const field of adapter.editorFields) {
-			newFields[field.key] = fields[field.key] ?? '';
+		for (const field of currentFields) {
+			newFields[field.key] = prev[field.key] ?? '';
 		}
 		fields = newFields;
 	});
@@ -176,6 +191,12 @@
 						<span class="text-xs text-zinc-500">
 							{adapter.icon} {adapter.label}
 						</span>
+					</div>
+				{/if}
+
+				{#if kindWarning}
+					<div class="mt-3 bg-amber-500/10 border border-amber-500/20 text-amber-400 px-4 py-3 rounded-lg text-sm animate-fade-in">
+						⚠️ {kindWarning}
 					</div>
 				{/if}
 			</div>

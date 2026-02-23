@@ -3,6 +3,21 @@ import type { NDKSvelte } from '@nostr-dev-kit/svelte';
 import type { EditorField, KindAdapter } from './index';
 import { kindLabel } from '../kind-labels';
 
+/** Validate that a value is a tag array (array of string arrays). */
+function parseExtraTags(raw: string): string[][] {
+	const parsed: unknown = JSON.parse(raw);
+	if (!Array.isArray(parsed)) return [];
+
+	const valid: string[][] = [];
+	for (const tag of parsed) {
+		if (!Array.isArray(tag)) continue;
+		if (!tag.every((el: unknown) => typeof el === 'string')) continue;
+		if (tag.length === 0) continue;
+		valid.push(tag as string[]);
+	}
+	return valid;
+}
+
 /**
  * Fallback adapter that handles *any* event kind.
  * Provides a JSON/plain-text content editor and a raw-tags view.
@@ -50,11 +65,8 @@ export class GenericAdapter implements KindAdapter {
 
 		if (fields.tags) {
 			try {
-				const extra: string[][] = JSON.parse(fields.tags);
-				if (Array.isArray(extra)) {
-					for (const tag of extra) {
-						if (Array.isArray(tag)) event.tags.push(tag);
-					}
+				for (const tag of parseExtraTags(fields.tags)) {
+					event.tags.push(tag);
 				}
 			} catch {
 				// ignore malformed tags input
@@ -71,14 +83,11 @@ export class GenericAdapter implements KindAdapter {
 		// Extra tags are additive — we don't remove previously set custom tags
 		if (fields.tags) {
 			try {
-				const extra: string[][] = JSON.parse(fields.tags);
-				if (Array.isArray(extra)) {
-					for (const tag of extra) {
-						if (Array.isArray(tag)) event.tags.push(tag);
-					}
+				for (const tag of parseExtraTags(fields.tags)) {
+					event.tags.push(tag);
 				}
 			} catch {
-				// ignore
+				// ignore malformed tags input
 			}
 		}
 	}
