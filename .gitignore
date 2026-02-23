@@ -7,3 +7,6 @@ dist
 .env.*
 !.env.example
 .ndk-local/
+
+# Git worktrees
+.worktrees/
