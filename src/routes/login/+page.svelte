@@ -44,7 +44,7 @@
 			<div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-500/20 to-indigo-500/20 border border-violet-500/20 mb-5">
 				<span class="text-2xl">📝</span>
 			</div>
-			<h1 class="text-2xl font-semibold text-zinc-100 tracking-tight">Collabstr</h1>
+			<h1 class="text-2xl font-semibold text-zinc-100 tracking-tight">Bolsillo</h1>
 			<p class="text-zinc-500 mt-2 text-sm">Collaborative documents on Nostr</p>
 		</div>
 

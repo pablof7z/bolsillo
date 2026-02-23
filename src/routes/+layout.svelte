@@ -10,7 +10,7 @@
 </script>
 
 <svelte:head>
-	<title>Collabstr — Collaborative Documents on Nostr</title>
+	<title>Bolsillo — Collaborative Documents on Nostr</title>
 	<meta name="description" content="Real-time collaborative document editing powered by Nostr and NDK" />
 </svelte:head>
 

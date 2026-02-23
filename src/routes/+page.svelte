@@ -55,7 +55,7 @@
 				<div class="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-500/20 to-indigo-500/20 border border-violet-500/20 flex items-center justify-center">
 					<span class="text-sm">📝</span>
 				</div>
-				<h1 class="text-lg font-semibold text-zinc-200 tracking-tight">Collabstr</h1>
+				<h1 class="text-lg font-semibold text-zinc-200 tracking-tight">Bolsillo</h1>
 			</div>
 
 			<div class="flex items-center gap-3">

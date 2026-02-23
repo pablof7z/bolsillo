@@ -1,4 +1,4 @@
-# Collabstr — Collaborative Documents on Nostr
+# Bolsillo — Collaborative Documents on Nostr
 
 A real-time collaborative document editor powered by [NDK](https://github.com/nostr-dev-kit/ndk) and [Nostr](https://nostr.com), showcasing [NIP-C1 Collaborative Events](https://github.com/nostr-dev-kit/ndk/tree/feat/nip-c1-collaborative-events).
 
