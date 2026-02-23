@@ -1,6 +1,12 @@
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 import path from 'path';
+import fs from 'fs';
+
+const ndkLocalPath = path.resolve(__dirname, './.ndk-local/index.mjs');
+const ndkAlias = fs.existsSync(ndkLocalPath)
+	? [{ find: '@nostr-dev-kit/ndk', replacement: ndkLocalPath }]
+	: [];
 
 export default defineConfig({
 	plugins: [sveltekit()],
@@ -22,11 +28,8 @@ export default defineConfig({
 		// Without this, Vite may resolve svelte to index-server.js (the 'default' export)
 		conditions: ['browser'],
 		alias: [
-			// Use local NDK build which includes NDKCollaborativeEvent
-			{
-				find: '@nostr-dev-kit/ndk',
-				replacement: path.resolve(__dirname, './.ndk-local/index.mjs')
-			},
+			// Use local NDK build if available, otherwise fall back to node_modules
+			...ndkAlias,
 			// Handle @noble/curves subpath imports — v2 has files in root, not esm/
 			{
 				find: '@noble/curves/esm/secp256k1',
