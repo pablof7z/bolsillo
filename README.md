@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://blossom.primal.net/4534e028453de4abf68c56550cdce8698f6fe76cf203a07c23bb6f0e060549b0.png" alt="Bolsillo Banner" />
+</p>
+
 # Bolsillo — Collaborative Documents on Nostr
 
 A real-time collaborative document editor powered by [NDK](https://github.com/nostr-dev-kit/ndk) and [Nostr](https://nostr.com), showcasing [NIP-C1 Collaborative Events](https://github.com/nostr-dev-kit/ndk/tree/feat/nip-c1-collaborative-events).
