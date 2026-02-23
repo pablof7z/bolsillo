@@ -5,16 +5,15 @@
 	import { ndk } from '$lib/ndk';
 	import { eventToVersion, publishUpdate, type DocVersion } from '$lib/documents.svelte';
 	import { formatDate, formatTimestamp } from '$lib/utils';
+	import { getAdapter, type KindAdapter } from '$lib/adapters';
 	import { User } from '$lib/components/ui';
 
-	let editTitle = $state('');
-	let editContent = $state('');
+	let editFields = $state<Record<string, string>>({});
 	let isEditing = $state(false);
 	let isSaving = $state(false);
 	let saveError = $state('');
 	let showVersions = $state(false);
 	let selectedVersionIdx = $state(0);
-
 
 	// Reset editing state when naddr changes
 	$effect(() => {
@@ -54,20 +53,22 @@
 
 	const collab = $derived(collabEvent ? NDKCollaborativeEvent.from(collabEvent) : null);
 	const authorPubkeys = $derived(collab?.authorPubkeys ?? []);
+	const targetKind = $derived(collab?.targetKind ?? NDKKind.Article);
+	const adapter: KindAdapter = $derived(getAdapter(targetKind));
 
-	// Subscribe to article versions for this document
-	const articleSub = ndk.$subscribe(() => {
+	// Subscribe to target event versions for this document
+	const targetSub = ndk.$subscribe(() => {
 		if (!collab?.dTag || authorPubkeys.length === 0) return undefined;
 		return {
-			filters: [{ kinds: [NDKKind.Article as number], authors: [...authorPubkeys], '#d': [collab.dTag] }],
+			filters: [{ kinds: [targetKind as number], authors: [...authorPubkeys], '#d': [collab.dTag] }],
 			skipVerification: true
 		};
 	});
 
-	// Compute sorted versions from article events
+	// Compute sorted versions from target events
 	const versions: DocVersion[] = $derived.by(() => {
 		const result: DocVersion[] = [];
-		for (const event of articleSub.events) {
+		for (const event of targetSub.events) {
 			const v = eventToVersion(event);
 			if (v) result.push(v);
 		}
@@ -83,8 +84,18 @@
 	const isLive = $derived(collabSub.eosed && collab !== null);
 
 	function startEditing() {
-		editTitle = currentVersion?.title ?? '';
-		editContent = currentVersion?.content ?? '';
+		// Populate edit fields from current version using adapter field definitions
+		const fields: Record<string, string> = {};
+		for (const field of adapter.editorFields) {
+			if (field.key === 'title') {
+				fields.title = currentVersion?.title ?? '';
+			} else if (field.key === 'content') {
+				fields.content = currentVersion?.content ?? '';
+			} else {
+				fields[field.key] = '';
+			}
+		}
+		editFields = fields;
 		isEditing = true;
 		saveError = '';
 	}
@@ -95,9 +106,12 @@
 	}
 
 	async function saveChanges() {
-		if (!editTitle.trim()) {
-			saveError = 'Title cannot be empty';
-			return;
+		// Validate required fields
+		for (const field of adapter.editorFields) {
+			if (field.required && !editFields[field.key]?.trim()) {
+				saveError = `${field.label} cannot be empty`;
+				return;
+			}
 		}
 		if (!collab) {
 			saveError = 'Document not loaded';
@@ -108,7 +122,7 @@
 		saveError = '';
 
 		try {
-			await publishUpdate(collab, editTitle.trim(), editContent);
+			await publishUpdate(collab, editFields);
 			isEditing = false;
 		} catch (err) {
 			saveError = err instanceof Error ? err.message : 'Failed to save';
@@ -122,12 +136,21 @@
 	<!-- Header -->
 	<header class="border-b border-zinc-800/60 backdrop-blur-sm bg-zinc-950/80 sticky top-0 z-10">
 		<div class="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
-			<a href="/documents" class="btn-ghost text-sm inline-flex items-center gap-2">
-				<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.75 19.5L8.25 12l7.5-7.5" />
-				</svg>
-				Documents
-			</a>
+			<div class="flex items-center gap-3">
+				<a href="/documents" class="btn-ghost text-sm inline-flex items-center gap-2">
+					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.75 19.5L8.25 12l7.5-7.5" />
+					</svg>
+					Documents
+				</a>
+
+				{#if collab}
+					<span class="text-[10px] font-medium text-zinc-500 bg-zinc-800/50 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+						<span>{adapter.icon}</span>
+						{adapter.label}
+					</span>
+				{/if}
+			</div>
 
 			<div class="flex items-center gap-3">
 				{#if isLive}
@@ -203,19 +226,47 @@
 
 					{#if isEditing}
 						<div class="space-y-6">
-							<input
-								type="text"
-								bind:value={editTitle}
-								class="w-full bg-transparent text-3xl font-semibold text-zinc-100 tracking-tight placeholder:text-zinc-700 focus:outline-none border-b border-zinc-800 pb-4"
-								placeholder="Document title"
-								disabled={isSaving}
-							/>
-							<textarea
-								bind:value={editContent}
-								class="w-full min-h-[60vh] bg-transparent text-zinc-300 font-mono text-sm leading-relaxed resize-none focus:outline-none placeholder:text-zinc-700"
-								placeholder="Start writing…"
-								disabled={isSaving}
-							></textarea>
+							{#each adapter.editorFields as field (field.key)}
+								{#if field.type === 'text'}
+									<div>
+										<label for="edit-{field.key}" class="block text-sm font-medium text-zinc-400 mb-2">{field.label}</label>
+										<input
+											id="edit-{field.key}"
+											type="text"
+											bind:value={editFields[field.key]}
+											class="w-full bg-transparent text-xl font-semibold text-zinc-100 tracking-tight placeholder:text-zinc-700 focus:outline-none border-b border-zinc-800 pb-4"
+											placeholder={field.placeholder}
+											disabled={isSaving}
+										/>
+									</div>
+								{:else if field.type === 'textarea'}
+									<div>
+										<label for="edit-{field.key}" class="block text-sm font-medium text-zinc-400 mb-2">
+											{field.label}
+										</label>
+										<textarea
+											id="edit-{field.key}"
+											bind:value={editFields[field.key]}
+											class="w-full min-h-[60vh] bg-transparent text-zinc-300 font-mono text-sm leading-relaxed resize-none focus:outline-none placeholder:text-zinc-700"
+											placeholder={field.placeholder}
+											disabled={isSaving}
+										></textarea>
+									</div>
+								{:else if field.type === 'json'}
+									<div>
+										<label for="edit-{field.key}" class="block text-sm font-medium text-zinc-400 mb-2">
+											{field.label}
+										</label>
+										<textarea
+											id="edit-{field.key}"
+											bind:value={editFields[field.key]}
+											class="w-full min-h-[12vh] bg-transparent text-zinc-300 font-mono text-sm leading-relaxed resize-none focus:outline-none placeholder:text-zinc-700"
+											placeholder={field.placeholder}
+											disabled={isSaving}
+										></textarea>
+									</div>
+								{/if}
+							{/each}
 						</div>
 					{:else}
 						<div>
