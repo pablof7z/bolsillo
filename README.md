@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://blossom.primal.net/4534e028453de4abf68c56550cdce8698f6fe76cf203a07c23bb6f0e060549b0.png" alt="Bolsillo Banner" />
+  <img src="https://blossom.primal.net/06b56e68895a3be87d8e33e2ab4c7f1b12e28ff8299366f30a46b2dd88adb786.png" alt="Bolsillo Banner" />
 </p>
 
 # Bolsillo — Collaborative Documents on Nostr
