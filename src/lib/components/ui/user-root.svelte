@@ -44,16 +44,22 @@
     return null;
   });
 
-  // Create profile fetcher at component initialization (NOT inside $effect!)
-  // The config function is reactive — it returns null when ndkUser is null,
-  // and the fetcher handles that gracefully.
-  const profileFetcher = propProfile !== undefined
-    ? null
-    : createProfileFetcher(() => ({ user: ndkUser ?? null }), ndk);
+  // Fetch profile if not provided (reactive to ndkUser changes)
+  let profileFetcher = $state<ReturnType<typeof createProfileFetcher> | null>(null);
+
+  $effect(() => {
+    if (propProfile !== undefined) {
+      profileFetcher = null;
+    } else if (ndkUser) {
+      profileFetcher = createProfileFetcher(() => ({ user: ndkUser! }), ndk);
+    } else {
+      profileFetcher = null;
+    }
+  });
 
   const profile = $derived(propProfile !== undefined ? propProfile : profileFetcher?.profile);
 
-  // Create reactive context using getters for reactivity
+  // Create reactive context using $state.raw() to preserve reactivity
   const context = {
     get ndk() { return ndk; },
     get user() { return user; },

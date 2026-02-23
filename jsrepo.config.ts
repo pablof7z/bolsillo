@@ -2,7 +2,7 @@ import { defineConfig } from 'jsrepo';
 
 export default defineConfig({
     // configure where stuff comes from here
-    registries: ['https://ndk.fyi/registry'],
+    registries: ['https://ndk.fyi/registry', '@ndk/svelte'],
     // configure where stuff goes here
     paths: {
 		blocks: 'src/lib/components/blocks',

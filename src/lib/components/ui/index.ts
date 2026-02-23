@@ -1,21 +1,14 @@
-import Root from './user-root.svelte';
-import Avatar from './user-avatar.svelte';
-import Name from './user-name.svelte';
-import Field from './user-field.svelte';
-import Handle from './user-handle.svelte';
-import Bio from './user-bio.svelte';
-import Banner from './user-banner.svelte';
-import Nip05 from './user-nip05.svelte';
+import Root from './unpublished-events-root.svelte';
+import Badge from './unpublished-events-badge.svelte';
+import List from './unpublished-events-list.svelte';
+import Item from './unpublished-events-item.svelte';
 
-export const User = {
+export const UnpublishedEvents = {
 	Root,
-	Avatar,
-	Name,
-	Field,
-	Handle,
-	Bio,
-	Banner,
-	Nip05
+	Badge,
+	List,
+	Item
 };
 
-export type { UserContext } from './user.context.js';
+export { UNPUBLISHED_EVENTS_CONTEXT_KEY } from './unpublished-events.context.js';
+export type { UnpublishedEventsContext } from './unpublished-events.context.js';
