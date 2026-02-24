@@ -18,7 +18,7 @@ export type ResolveResult =
 	| { ok: false; error: ResolveError };
 
 const HEX_PUBKEY_RE = /^[0-9a-f]{64}$/i;
-const NIP05_RE = /^(?:[\w.+-]+@)?[\w.-]+\.\w+$/;
+const NIP05_RE = /^[\w.+-]+@[\w.-]+\.\w+$/;
 
 /**
  * Resolve a user input string (npub, hex pubkey, or NIP-05) to a hex pubkey.

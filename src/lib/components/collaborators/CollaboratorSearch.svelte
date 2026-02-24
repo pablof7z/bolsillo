@@ -26,6 +26,13 @@
 		}
 	});
 
+	// Clear pending debounce timer on component teardown
+	$effect(() => {
+		return () => {
+			if (debounceTimer) clearTimeout(debounceTimer);
+		};
+	});
+
 	function reset() {
 		inputValue = '';
 		resolving = false;
@@ -66,11 +73,18 @@
 
 		resolving = true;
 		debounceTimer = setTimeout(async () => {
-			const res = await resolveUser(value, ndk);
-			// Only update if input hasn't changed
-			if (inputValue.trim() === value) {
-				result = res;
-				resolving = false;
+			try {
+				const res = await resolveUser(value, ndk);
+				// Only update if input hasn't changed
+				if (inputValue.trim() === value) {
+					result = res;
+					resolving = false;
+				}
+			} catch {
+				if (inputValue.trim() === value) {
+					result = { ok: false, error: { type: 'network', message: 'Unexpected error resolving user' } };
+					resolving = false;
+				}
 			}
 		}, 400);
 	}
@@ -148,7 +162,7 @@
 						<div class="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-3">
 							{result.error.message}
 						</div>
-					{:else if !resolving && inputValue.trim()}
+					{:else if resolving && inputValue.trim()}
 						<p class="text-xs text-zinc-600 px-1">Resolving…</p>
 					{/if}
 				</div>
