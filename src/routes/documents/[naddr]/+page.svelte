@@ -105,20 +105,27 @@
 			if (tag[0] !== 'a' || !tag[1]) continue;
 			const parts = tag[1].split(':');
 			if (parts.length < 3) continue;
+			const identifier = parts[2];
+			if (!identifier) continue;
 			// Only consider a-tags referencing the same kind as our pointer
 			if (parseInt(parts[0]) !== decoded.kind) continue;
 			// If it matches our pointer, this is the expected back-reference
 			if (tag[1] === currentPointerAddr) continue;
 			// Different pointer of the same kind → fork detected
-			return {
-				addr: tag[1],
-				naddr: nip19.naddrEncode({
-					kind: parseInt(parts[0]),
-					pubkey: parts[1],
-					identifier: parts[2],
-					relays: ['wss://relay.damus.io', 'wss://nos.lol']
-				})
-			};
+			try {
+				const relays = event.relay?.url ? [event.relay.url] : [];
+				return {
+					addr: tag[1],
+					naddr: nip19.naddrEncode({
+						kind: parseInt(parts[0]),
+						pubkey: parts[1],
+						identifier,
+						relays
+					})
+				};
+			} catch {
+				return null;
+			}
 		}
 		return null;
 	}
