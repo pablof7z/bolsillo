@@ -7,6 +7,7 @@ const AUTH_METHOD_KEY = 'bolsillo-auth-method';
 const NIP46_CONNECTION_KEY = 'bolsillo-nip46-connection';
 const NIP46_LOCAL_KEY = 'bolsillo-nip46-local-key';
 const NOSTRCONNECT_RELAY_KEY = 'bolsillo-nostrconnect-relay';
+const NIP46_SIGNER_PAYLOAD_KEY = 'bolsillo-nip46-signer-payload';
 
 export type AuthMethod = 'nsec' | 'nip07' | 'nip46' | 'nostrconnect';
 
@@ -26,6 +27,7 @@ export async function login(nsec: string): Promise<void> {
 	if (browser) {
 		localStorage.setItem(STORAGE_KEY, nsec);
 		localStorage.setItem(AUTH_METHOD_KEY, 'nsec');
+		localStorage.removeItem(NIP46_SIGNER_PAYLOAD_KEY);
 	}
 }
 
@@ -49,6 +51,7 @@ export async function loginWithExtension(): Promise<void> {
 	localStorage.removeItem(NIP46_CONNECTION_KEY);
 	localStorage.removeItem(NIP46_LOCAL_KEY);
 	localStorage.removeItem(NOSTRCONNECT_RELAY_KEY);
+	localStorage.removeItem(NIP46_SIGNER_PAYLOAD_KEY);
 }
 
 /**
@@ -73,8 +76,10 @@ export async function loginWithBunker(connectionString: string, timeoutMs = 30_0
 	await Promise.race([ready, timeout]);
 	await ndk.$sessions!.login(signer, { setActive: true });
 
-	// Persist connection info for session restore
+	// Persist full signer state for session restore
 	localStorage.setItem(AUTH_METHOD_KEY, 'nip46');
+	localStorage.setItem(NIP46_SIGNER_PAYLOAD_KEY, signer.toPayload());
+	// Keep legacy keys as fallback
 	localStorage.setItem(NIP46_CONNECTION_KEY, connectionString.trim());
 	localStorage.setItem(NIP46_LOCAL_KEY, signer.localSigner.privateKey ?? '');
 	localStorage.removeItem(STORAGE_KEY);
@@ -120,13 +125,13 @@ export async function loginWithNostrConnect(
 	await Promise.race([ready, timeout]);
 	await ndk.$sessions!.login(signer, { setActive: true });
 
-	// Persist connection info for session restore
-	const relay = signer.relayUrls?.[0] ?? RELAYS[0];
+	// Persist full signer state for session restore (preserves remote pubkey, relay URLs, etc.)
 	localStorage.setItem(AUTH_METHOD_KEY, 'nostrconnect');
-	localStorage.setItem(NIP46_LOCAL_KEY, signer.localSigner.privateKey ?? '');
-	localStorage.setItem(NOSTRCONNECT_RELAY_KEY, relay);
+	localStorage.setItem(NIP46_SIGNER_PAYLOAD_KEY, signer.toPayload());
 	localStorage.removeItem(STORAGE_KEY);
 	localStorage.removeItem(NIP46_CONNECTION_KEY);
+	localStorage.removeItem(NIP46_LOCAL_KEY);
+	localStorage.removeItem(NOSTRCONNECT_RELAY_KEY);
 }
 
 /**
@@ -153,6 +158,21 @@ export async function restoreSession(): Promise<void> {
 			}
 
 			case 'nip46': {
+				const payload = localStorage.getItem(NIP46_SIGNER_PAYLOAD_KEY);
+				if (payload) {
+					const signer = await NDKNip46Signer.fromPayload(payload, ndk);
+					const ready = signer.blockUntilReady();
+					const timeout = new Promise<never>((_, reject) =>
+						setTimeout(
+							() => reject(new Error('Session restore timed out.')),
+							30_000
+						)
+					);
+					await Promise.race([ready, timeout]);
+					await ndk.$sessions!.login(signer, { setActive: true });
+					return;
+				}
+				// Fallback to legacy restore (connection string + local key)
 				const connection = localStorage.getItem(NIP46_CONNECTION_KEY);
 				const localKey = localStorage.getItem(NIP46_LOCAL_KEY);
 				if (!connection) {
@@ -174,17 +194,12 @@ export async function restoreSession(): Promise<void> {
 			}
 
 			case 'nostrconnect': {
-				const localKey = localStorage.getItem(NIP46_LOCAL_KEY);
-				const relay = localStorage.getItem(NOSTRCONNECT_RELAY_KEY);
-				if (!localKey || !relay) {
+				const payload = localStorage.getItem(NIP46_SIGNER_PAYLOAD_KEY);
+				if (!payload) {
 					clearAuthStorage();
 					return;
 				}
-				const signer = NDKNip46Signer.nostrconnect(ndk, relay, localKey, {
-					name: 'Bolsillo',
-					url: window.location.origin,
-					perms: 'get_public_key,sign_event,nip04_encrypt,nip04_decrypt,nip44_encrypt,nip44_decrypt'
-				});
+				const signer = await NDKNip46Signer.fromPayload(payload, ndk);
 				const ready = signer.blockUntilReady();
 				const timeout = new Promise<never>((_, reject) =>
 					setTimeout(
@@ -240,4 +255,5 @@ function clearAuthStorage(): void {
 	localStorage.removeItem(NIP46_CONNECTION_KEY);
 	localStorage.removeItem(NIP46_LOCAL_KEY);
 	localStorage.removeItem(NOSTRCONNECT_RELAY_KEY);
+	localStorage.removeItem(NIP46_SIGNER_PAYLOAD_KEY);
 }
