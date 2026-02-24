@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { NDKCollaborativeEvent, NDKKind } from '@nostr-dev-kit/ndk';
+	import { NDKCollaborativeEvent, NDKEvent, NDKKind } from '@nostr-dev-kit/ndk';
 	import { nip19 } from 'nostr-tools';
 	import { ndk } from '$lib/ndk';
 	import { eventToVersion, publishUpdate, type DocVersion } from '$lib/documents.svelte';
@@ -82,6 +82,70 @@
 		ndk.$currentPubkey != null && authorPubkeys.includes(ndk.$currentPubkey)
 	);
 	const isLive = $derived(collabSub.eosed && collab !== null);
+
+	// ── Fork detection ─────────────────────────────────────────
+
+	// The address of the pointer event we navigated to
+	const currentPointerAddr = $derived(
+		decoded ? `${decoded.kind}:${decoded.pubkey}:${decoded.identifier}` : null
+	);
+
+	interface ForkTarget {
+		addr: string;
+		naddr: string;
+	}
+
+	/**
+	 * Check if a target event references a different pointer than the one we followed.
+	 * Returns the forked pointer info, or null if no fork.
+	 */
+	function findForkTarget(event: NDKEvent): ForkTarget | null {
+		if (!currentPointerAddr || !decoded) return null;
+		for (const tag of event.tags) {
+			if (tag[0] !== 'a' || !tag[1]) continue;
+			const parts = tag[1].split(':');
+			if (parts.length < 3) continue;
+			// Only consider a-tags referencing the same kind as our pointer
+			if (parseInt(parts[0]) !== decoded.kind) continue;
+			// If it matches our pointer, this is the expected back-reference
+			if (tag[1] === currentPointerAddr) continue;
+			// Different pointer of the same kind → fork detected
+			return {
+				addr: tag[1],
+				naddr: nip19.naddrEncode({
+					kind: parseInt(parts[0]),
+					pubkey: parts[1],
+					identifier: parts[2],
+					relays: ['wss://relay.damus.io', 'wss://nos.lol']
+				})
+			};
+		}
+		return null;
+	}
+
+	// Map of eventId → ForkTarget for versions referencing a different pointer
+	const forksByEventId = $derived.by(() => {
+		const map = new Map<string, ForkTarget>();
+		for (const event of targetSub.events) {
+			const fork = findForkTarget(event);
+			if (fork && event.id) map.set(event.id, fork);
+		}
+		return map;
+	});
+
+	// Fork info for the currently displayed version
+	const displayFork = $derived(
+		displayVersion ? forksByEventId.get(displayVersion.eventId) ?? null : null
+	);
+
+	// The most recent fork across all versions (for header indicator)
+	const latestFork = $derived.by(() => {
+		for (const version of versions) {
+			const fork = forksByEventId.get(version.eventId);
+			if (fork) return fork;
+		}
+		return null;
+	});
 
 	/** Tags that are managed automatically and should not appear in the extra-tags editor. */
 	const SYSTEM_TAG_NAMES = new Set(['d', 'a', 'title', 'published_at']);
@@ -176,6 +240,19 @@
 						</span>
 						Live
 					</span>
+				{/if}
+
+				{#if latestFork}
+					<a
+						href="/documents/{latestFork.naddr}"
+						class="inline-flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 transition-colors"
+						title="This document has been forked to a different pointer"
+					>
+						<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+						</svg>
+						Forked
+					</a>
 				{/if}
 
 				{#if !isEditing && isAuthor}
@@ -316,6 +393,28 @@
 								{/if}
 							</div>
 
+							{#if displayFork}
+								<div class="bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-3 mb-6 animate-fade-in">
+									<div class="flex items-center justify-between gap-3">
+										<div class="flex items-center gap-2 text-sm text-amber-300">
+											<svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+											</svg>
+											<span>This version references a different pointer</span>
+										</div>
+										<a
+											href="/documents/{displayFork.naddr}"
+											class="inline-flex items-center gap-1.5 text-sm font-medium text-amber-400 hover:text-amber-300 whitespace-nowrap transition-colors"
+										>
+											Follow fork
+											<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+											</svg>
+										</a>
+									</div>
+								</div>
+							{/if}
+
 							{#if displayVersion?.content}
 								<div class="prose-content font-mono text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
 									{displayVersion.content}
@@ -359,6 +458,16 @@
 										<div class="mt-1.5 ml-4.5">
 											<span class="text-[10px] font-medium text-emerald-400/80 bg-emerald-500/10 px-1.5 py-0.5 rounded">
 												Latest
+											</span>
+										</div>
+									{/if}
+									{#if forksByEventId.has(version.eventId)}
+										<div class="mt-1.5 ml-4.5">
+											<span class="text-[10px] font-medium text-amber-400/80 bg-amber-500/10 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+												<svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+												</svg>
+												Forked
 											</span>
 										</div>
 									{/if}
@@ -425,6 +534,14 @@
 										{#if idx === 0}
 											<span class="text-[10px] font-medium text-emerald-400/80 bg-emerald-500/10 px-1.5 py-0.5 rounded ml-4.5 mt-1 inline-block">
 												Latest
+											</span>
+										{/if}
+										{#if forksByEventId.has(version.eventId)}
+											<span class="text-[10px] font-medium text-amber-400/80 bg-amber-500/10 px-1.5 py-0.5 rounded ml-4.5 mt-1 inline-flex items-center gap-1">
+												<svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+												</svg>
+												Forked
 											</span>
 										{/if}
 									</button>
