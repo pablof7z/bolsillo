@@ -6,13 +6,13 @@
 	import { createDocument } from '$lib/documents.svelte';
 	import { getAdapter, type KindAdapter } from '$lib/adapters';
 	import { SUGGESTED_KINDS, isReplaceableKind, isEphemeralKind } from '$lib/kind-labels';
+	import CollaboratorList from '$lib/components/collaborators/CollaboratorList.svelte';
 
 	let selectedKind = $state(NDKKind.Article as number);
 	let customKind = $state('');
 	let showCustomKind = $state(false);
 	let fields = $state<Record<string, string>>({});
-	let authorsInput = $state('');
-	let showAuthors = $state(false);
+	let collaboratorPubkeys = $state<string[]>([]);
 	let loading = $state(false);
 	let error = $state('');
 	let skippedWarning = $state('');
@@ -76,12 +76,7 @@
 		skippedWarning = '';
 
 		try {
-			const additionalAuthors = authorsInput
-				.split('\n')
-				.map((a) => a.trim())
-				.filter(Boolean);
-
-			const result = await createDocument(selectedKind, fields, additionalAuthors);
+			const result = await createDocument(selectedKind, fields, collaboratorPubkeys);
 
 			if (result.skippedAuthors.length > 0) {
 				skippedWarning = `Skipped invalid collaborator${result.skippedAuthors.length > 1 ? 's' : ''}: ${result.skippedAuthors.join(', ')}`;
@@ -252,39 +247,12 @@
 					</div>
 				{/each}
 
-				<!-- Additional Authors -->
-				<div>
-					<button
-						type="button"
-						onclick={() => (showAuthors = !showAuthors)}
-						class="text-sm text-zinc-500 hover:text-zinc-300 transition-colors inline-flex items-center gap-1.5"
-					>
-						<svg
-							class="w-3.5 h-3.5 transition-transform {showAuthors ? 'rotate-90' : ''}"
-							fill="none"
-							stroke="currentColor"
-							viewBox="0 0 24 24"
-						>
-							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
-						</svg>
-						Add collaborators
-					</button>
-
-					{#if showAuthors}
-						<div class="mt-3 animate-slide-up">
-							<textarea
-								bind:value={authorsInput}
-								placeholder="One npub or hex pubkey per line&#10;npub1abc...&#10;npub1xyz..."
-								rows={4}
-								class="input font-mono text-sm"
-								disabled={loading}
-							></textarea>
-							<p class="text-xs text-zinc-600 mt-2">
-								These users will be authorized to edit this document.
-							</p>
-						</div>
-					{/if}
-				</div>
+				<!-- Collaborators -->
+				<CollaboratorList
+					pubkeys={collaboratorPubkeys}
+					onUpdate={(updated) => (collaboratorPubkeys = updated)}
+					disabled={loading}
+				/>
 			</form>
 		</div>
 	</main>
