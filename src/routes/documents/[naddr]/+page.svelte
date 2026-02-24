@@ -15,6 +15,7 @@
 	let saveError = $state('');
 	let showVersions = $state(false);
 	let selectedVersionIdx = $state(0);
+	let copySuccess = $state(false);
 
 	// Reset editing state when naddr changes
 	$effect(() => {
@@ -88,6 +89,23 @@
 
 	/** Tags that are managed automatically and should not appear in the extra-tags editor. */
 	const SYSTEM_TAG_NAMES = new Set(['d', 'a', 'title', 'published_at']);
+
+	/** The actual NDKEvent backing the latest version, used for encoding the naddr. */
+	const latestEvent = $derived(
+		currentVersion ? targetSub.events.find((e) => e.id === currentVersion.eventId) ?? null : null
+	);
+
+	async function copyNaddr() {
+		if (!latestEvent) return;
+		try {
+			const encoded = latestEvent.encode();
+			await navigator.clipboard.writeText(encoded);
+			copySuccess = true;
+			setTimeout(() => (copySuccess = false), 2000);
+		} catch {
+			// Fallback: if clipboard API fails, do nothing
+		}
+	}
 
 	function startEditing() {
 		// Find the actual NDKEvent backing the current version so we can
@@ -179,6 +197,22 @@
 						</span>
 						Live
 					</span>
+				{/if}
+
+				{#if !isEditing && latestEvent}
+					<button onclick={copyNaddr} class="btn-ghost text-sm inline-flex items-center gap-2" title="Copy naddr">
+						{#if copySuccess}
+							<svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.5 12.75l6 6 9-13.5" />
+							</svg>
+							<span class="text-emerald-400">Copied!</span>
+						{:else}
+							<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
+							</svg>
+							Copy naddr
+						{/if}
+					</button>
 				{/if}
 
 				{#if !isEditing && isAuthor}
