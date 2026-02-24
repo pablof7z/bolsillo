@@ -55,7 +55,24 @@ The command publishes both the collaborative pointer (kind 39382) and the initia
 npx bolsillo fetch <naddr>
 ```
 
-Returns JSON with the pointer metadata and the latest target event:
+Returns the latest target event as JSON:
+
+```json
+{
+  "id": "...",
+  "pubkey": "...",
+  "kind": 30023,
+  "content": "...",
+  "tags": [...],
+  "created_at": 1234567890
+}
+```
+
+Add `--verbose` to include the collaborative pointer metadata:
+
+```bash
+npx bolsillo fetch --verbose <naddr>
+```
 
 ```json
 {
@@ -66,14 +83,7 @@ Returns JSON with the pointer metadata and the latest target event:
     "targetKind": 30023,
     "authors": ["pubkey1", "pubkey2"]
   },
-  "event": {
-    "id": "...",
-    "pubkey": "...",
-    "kind": 30023,
-    "content": "...",
-    "tags": [...],
-    "created_at": 1234567890
-  }
+  "event": { ... }
 }
 ```
 
