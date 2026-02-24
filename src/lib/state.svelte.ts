@@ -110,7 +110,14 @@ export async function restoreSession(): Promise<void> {
 				}
 				const localSigner = localKey || undefined;
 				const signer = NDKNip46Signer.bunker(ndk, connection, localSigner);
-				await signer.blockUntilReady();
+				const ready = signer.blockUntilReady();
+				const timeout = new Promise<never>((_, reject) =>
+					setTimeout(
+						() => reject(new Error('Session restore timed out.')),
+						30_000
+					)
+				);
+				await Promise.race([ready, timeout]);
 				await ndk.$sessions!.login(signer, { setActive: true });
 				return;
 			}
