@@ -18,4 +18,4 @@ program.addCommand(createCommand);
 program.addCommand(fetchCommand);
 program.addCommand(updateCommand);
 
-program.parse();
+await program.parseAsync();

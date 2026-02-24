@@ -21,7 +21,8 @@ export async function createConnectedNDK(nsec?: string): Promise<NDK> {
 		if (decoded.type !== 'nsec') {
 			throw new Error('Invalid key format — expected an nsec');
 		}
-		signer = new NDKPrivateKeySigner(decoded.data as unknown as string);
+		const secretKeyHex = Buffer.from(decoded.data as Uint8Array).toString('hex');
+		signer = new NDKPrivateKeySigner(secretKeyHex);
 	}
 
 	const ndk = new NDK({

@@ -1,24 +1,19 @@
 import { Command } from 'commander';
 import NDK, {
-	NDKCollaborativeEvent,
 	NDKKind,
 	NDKSubscriptionCacheUsage
 } from '@nostr-dev-kit/ndk';
-import { nip19 } from 'nostr-tools';
 import { createConnectedNDK, disconnectNDK } from '../ndk.js';
+import { decodeNaddr, fetchCollaborativePointer } from '../fetch-pointer.js';
 
 export const fetchCommand = new Command('fetch')
 	.description('Fetch the latest version of a NIP-C1 collaborative document')
 	.argument('<naddr>', 'naddr of the collaborative pointer (kind 39382)')
 	.action(async (naddr: string) => {
 		// ── Decode the naddr ─────────────────────────────────
-		let decoded: nip19.AddressPointer;
+		let decoded: ReturnType<typeof decodeNaddr>;
 		try {
-			const result = nip19.decode(naddr);
-			if (result.type !== 'naddr') {
-				throw new Error(`Expected naddr, got ${result.type}`);
-			}
-			decoded = result.data;
+			decoded = decodeNaddr(naddr);
 		} catch (err) {
 			console.error(
 				'Error decoding naddr:',
@@ -28,6 +23,7 @@ export const fetchCommand = new Command('fetch')
 		}
 
 		let ndk: NDK | undefined;
+		let exitCode = 0;
 
 		try {
 			console.error('Connecting to relays…');
@@ -35,23 +31,7 @@ export const fetchCommand = new Command('fetch')
 
 			// ── Fetch the collaborative pointer ──────────────────
 			console.error('Fetching collaborative pointer…');
-			const pointerEvents = await ndk.fetchEvents({
-				kinds: [decoded.kind],
-				authors: [decoded.pubkey],
-				'#d': [decoded.identifier]
-			}, { cacheUsage: NDKSubscriptionCacheUsage.ONLY_RELAY });
-
-			if (pointerEvents.size === 0) {
-				console.error('Error: Collaborative pointer not found');
-				process.exit(1);
-			}
-
-			// Pick the newest pointer event
-			const pointerEvent = [...pointerEvents].reduce((a, b) =>
-				(a.created_at ?? 0) > (b.created_at ?? 0) ? a : b
-			);
-
-			const collab = NDKCollaborativeEvent.from(pointerEvent);
+			const collab = await fetchCollaborativePointer(ndk, decoded);
 			const targetKind = collab.targetKind ?? NDKKind.Article;
 			const authorPubkeys = collab.authorPubkeys;
 			const dTag = collab.dTag ?? decoded.identifier;
@@ -119,9 +99,9 @@ export const fetchCommand = new Command('fetch')
 				'Fatal:',
 				err instanceof Error ? err.message : err
 			);
-			process.exit(1);
+			exitCode = 1;
 		} finally {
 			if (ndk) disconnectNDK(ndk);
-			setTimeout(() => process.exit(0), 500);
+			setTimeout(() => process.exit(exitCode), 500);
 		}
 	});

@@ -1,14 +1,11 @@
 import { Command } from 'commander';
 import { readFileSync } from 'node:fs';
 import NDK, {
-	NDKArticle,
-	NDKCollaborativeEvent,
-	NDKEvent,
-	NDKKind,
-	NDKSubscriptionCacheUsage
+	NDKKind
 } from '@nostr-dev-kit/ndk';
-import { nip19 } from 'nostr-tools';
 import { createConnectedNDK, disconnectNDK } from '../ndk.js';
+import { buildTargetEvent, type EventTemplate } from '../build-target-event.js';
+import { decodeNaddr, fetchCollaborativePointer } from '../fetch-pointer.js';
 
 export const updateCommand = new Command('update')
 	.description('Publish a new version of a NIP-C1 collaborative document')
@@ -22,13 +19,9 @@ export const updateCommand = new Command('update')
 		}
 
 		// ── Decode the naddr ─────────────────────────────────
-		let decoded: nip19.AddressPointer;
+		let decoded: ReturnType<typeof decodeNaddr>;
 		try {
-			const result = nip19.decode(naddr);
-			if (result.type !== 'naddr') {
-				throw new Error(`Expected naddr, got ${result.type}`);
-			}
-			decoded = result.data;
+			decoded = decodeNaddr(naddr);
 		} catch (err) {
 			console.error(
 				'Error decoding naddr:',
@@ -38,7 +31,7 @@ export const updateCommand = new Command('update')
 		}
 
 		// ── Read the update template ─────────────────────────
-		let template: { content?: string; tags?: string[][] };
+		let template: EventTemplate;
 		try {
 			const raw = readFileSync(file, 'utf-8');
 			template = JSON.parse(raw);
@@ -51,6 +44,7 @@ export const updateCommand = new Command('update')
 		}
 
 		let ndk: NDK | undefined;
+		let exitCode = 0;
 
 		try {
 			console.error('Connecting to relays…');
@@ -63,22 +57,7 @@ export const updateCommand = new Command('update')
 
 			// ── Fetch the collaborative pointer ──────────────────
 			console.error('Fetching collaborative pointer…');
-			const pointerEvents = await ndk.fetchEvents({
-				kinds: [decoded.kind],
-				authors: [decoded.pubkey],
-				'#d': [decoded.identifier]
-			}, { cacheUsage: NDKSubscriptionCacheUsage.ONLY_RELAY });
-
-			if (pointerEvents.size === 0) {
-				console.error('Error: Collaborative pointer not found');
-				process.exit(1);
-			}
-
-			const pointerEvent = [...pointerEvents].reduce((a, b) =>
-				(a.created_at ?? 0) > (b.created_at ?? 0) ? a : b
-			);
-
-			const collab = NDKCollaborativeEvent.from(pointerEvent);
+			const collab = await fetchCollaborativePointer(ndk, decoded);
 			const targetKind = collab.targetKind ?? NDKKind.Article;
 			const dTag = collab.dTag ?? decoded.identifier;
 			const authorPubkeys = collab.authorPubkeys;
@@ -92,40 +71,10 @@ export const updateCommand = new Command('update')
 			}
 
 			// ── Build the updated target event ───────────────────
-			let targetEvent: NDKEvent;
+			const targetEvent = buildTargetEvent(ndk, targetKind, dTag, template);
 
-			if (targetKind === NDKKind.Article) {
-				const article = new NDKArticle(ndk);
-				article.dTag = dTag;
-				article.content = template.content ?? '';
-
-				if (template.tags) {
-					for (const tag of template.tags) {
-						if (tag[0] === 'title') {
-							article.title = tag[1] ?? '';
-						} else if (tag[0] !== 'd') {
-							article.tags.push(tag);
-						}
-					}
-				}
-				targetEvent = article;
-			} else {
-				targetEvent = new NDKEvent(ndk);
-				targetEvent.kind = targetKind;
-				targetEvent.tags.push(['d', dTag]);
-				targetEvent.content = template.content ?? '';
-
-				if (template.tags) {
-					for (const tag of template.tags) {
-						if (tag[0] !== 'd') {
-							targetEvent.tags.push(tag);
-						}
-					}
-				}
-			}
-
-			// Add back-reference to the pointer
-			const pointerAddr = `${NDKKind.CollaborativeEvent}:${collab.pubkey}:${collab.dTag}`;
+			// Add back-reference to the pointer (use computed dTag for safety)
+			const pointerAddr = `${NDKKind.CollaborativeEvent}:${collab.pubkey}:${dTag}`;
 			targetEvent.tags.push(['a', pointerAddr]);
 
 			// ── Publish ──────────────────────────────────────────
@@ -148,9 +97,9 @@ export const updateCommand = new Command('update')
 				'Fatal:',
 				err instanceof Error ? err.message : err
 			);
-			process.exit(1);
+			exitCode = 1;
 		} finally {
 			if (ndk) disconnectNDK(ndk);
-			setTimeout(() => process.exit(0), 500);
+			setTimeout(() => process.exit(exitCode), 500);
 		}
 	});

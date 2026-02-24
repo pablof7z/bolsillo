@@ -1,7 +1,6 @@
 import { Command } from 'commander';
 import { readFileSync } from 'node:fs';
 import NDK, {
-	NDKArticle,
 	NDKCollaborativeEvent,
 	NDKEvent,
 	NDKKind
@@ -9,57 +8,12 @@ import NDK, {
 import { nip19 } from 'nostr-tools';
 import { createConnectedNDK, disconnectNDK, RELAYS } from '../ndk.js';
 import { resolveCollaborator } from '../resolve-collaborator.js';
+import { buildTargetEvent, type EventTemplate } from '../build-target-event.js';
 
 interface CreateOptions {
 	kind: string;
 	collab: string[];
 	dtag: string;
-}
-
-/**
- * Build the target event from the JSON template.
- */
-function buildTargetEvent(
-	ndk: NDK,
-	kind: number,
-	dTag: string,
-	template: { content?: string; tags?: string[][] }
-): NDKEvent {
-	// Use NDKArticle for kind 30023 for proper title handling
-	if (kind === NDKKind.Article) {
-		const article = new NDKArticle(ndk);
-		article.dTag = dTag;
-		article.content = template.content ?? '';
-
-		// Apply tags from the template
-		if (template.tags) {
-			for (const tag of template.tags) {
-				if (tag[0] === 'title') {
-					article.title = tag[1] ?? '';
-				} else if (tag[0] !== 'd') {
-					// Don't override the d-tag we already set
-					article.tags.push(tag);
-				}
-			}
-		}
-		return article;
-	}
-
-	// Generic event for all other kinds
-	const event = new NDKEvent(ndk);
-	event.kind = kind;
-	event.tags.push(['d', dTag]);
-	event.content = template.content ?? '';
-
-	if (template.tags) {
-		for (const tag of template.tags) {
-			if (tag[0] !== 'd') {
-				event.tags.push(tag);
-			}
-		}
-	}
-
-	return event;
 }
 
 export const createCommand = new Command('create')
@@ -82,7 +36,7 @@ export const createCommand = new Command('create')
 		}
 
 		// Read the JSON template
-		let template: { content?: string; tags?: string[][] };
+		let template: EventTemplate;
 		try {
 			const raw = readFileSync(file, 'utf-8');
 			template = JSON.parse(raw);
@@ -95,6 +49,7 @@ export const createCommand = new Command('create')
 		}
 
 		let ndk: NDK | undefined;
+		let exitCode = 0;
 
 		try {
 			console.error('Connecting to relays…');
@@ -128,7 +83,7 @@ export const createCommand = new Command('create')
 
 			for (const pk of authorPubkeys) {
 				collab.authors.push(ndk.getUser({ pubkey: pk }));
-				collab.tags.push(['p', pk]);
+				collab.tags.push(['p', pk, RELAYS[0]]);
 			}
 
 			await collab.sign(signer);
@@ -184,10 +139,9 @@ export const createCommand = new Command('create')
 				'Fatal:',
 				err instanceof Error ? err.message : err
 			);
-			process.exit(1);
+			exitCode = 1;
 		} finally {
 			if (ndk) disconnectNDK(ndk);
-			// Force exit since WebSocket connections may keep the event loop alive
-			setTimeout(() => process.exit(0), 500);
+			setTimeout(() => process.exit(exitCode), 500);
 		}
 	});
