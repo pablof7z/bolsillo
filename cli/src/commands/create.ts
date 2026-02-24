@@ -109,7 +109,7 @@ export const createCommand = new Command('create')
 			if (isAddressable) {
 				await targetEvent.publishReplaceable(undefined, undefined, 0);
 			} else {
-				await targetEvent.publish(undefined, 0);
+				await targetEvent.publish(undefined, undefined, 0);
 			}
 
 			// ── Encode and output the naddr ──────────────────────

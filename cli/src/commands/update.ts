@@ -84,7 +84,7 @@ export const updateCommand = new Command('update')
 			if (isAddressable) {
 				await targetEvent.publishReplaceable(undefined, undefined, 0);
 			} else {
-				await targetEvent.publish(undefined, 0);
+				await targetEvent.publish(undefined, undefined, 0);
 			}
 
 			console.error('\n✓ Published update');

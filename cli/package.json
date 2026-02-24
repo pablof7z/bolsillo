@@ -1,6 +1,6 @@
 {
   "name": "bolsillo",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "CLI tool for NIP-C1 collaborative events on Nostr",
   "type": "module",
   "bin": {
