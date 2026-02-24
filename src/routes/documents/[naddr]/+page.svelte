@@ -7,6 +7,7 @@
 	import { formatDate, formatTimestamp } from '$lib/utils';
 	import { getAdapter, type KindAdapter } from '$lib/adapters';
 	import { User } from '$lib/components/ui';
+	import MarkdownContent from '$lib/components/MarkdownContent.svelte';
 
 	let editFields = $state<Record<string, string>>({});
 	let isEditing = $state(false);
@@ -82,6 +83,10 @@
 		ndk.$currentPubkey != null && authorPubkeys.includes(ndk.$currentPubkey)
 	);
 	const isLive = $derived(collabSub.eosed && collab !== null);
+
+	/** Kinds whose content should be rendered as markdown rather than plain text. */
+	const MARKDOWN_KINDS = new Set([NDKKind.Article, NDKKind.Wiki]);
+	const isMarkdownKind = $derived(MARKDOWN_KINDS.has(targetKind));
 
 	/** Tags that are managed automatically and should not appear in the extra-tags editor. */
 	const SYSTEM_TAG_NAMES = new Set(['d', 'a', 'title', 'published_at']);
@@ -317,9 +322,13 @@
 							</div>
 
 							{#if displayVersion?.content}
-								<div class="prose-content font-mono text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
-									{displayVersion.content}
-								</div>
+								{#if isMarkdownKind}
+									<MarkdownContent content={displayVersion.content} />
+								{:else}
+									<div class="prose-content font-mono text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
+										{displayVersion.content}
+									</div>
+								{/if}
 							{:else}
 								<p class="text-zinc-600 italic">No content yet. Click Edit to add content.</p>
 							{/if}
