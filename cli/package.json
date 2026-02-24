@@ -20,6 +20,15 @@
     "ndk"
   ],
   "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pablof7z/bolsillo.git",
+    "directory": "cli"
+  },
+  "homepage": "https://github.com/pablof7z/bolsillo/tree/main/cli#readme",
   "dependencies": {
     "@nostr-dev-kit/ndk": "^3.0.3",
     "commander": "^13.1.0",

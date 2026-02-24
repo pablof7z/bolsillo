@@ -1,0 +1,9 @@
+{
+  "content": "This is version 2 of the test article - multiple updates test.",
+  "tags": [
+    ["title", "CLI Test Article - Version 2"],
+    ["t", "testing"],
+    ["t", "nip-c1"],
+    ["t", "version-2"]
+  ]
+}
