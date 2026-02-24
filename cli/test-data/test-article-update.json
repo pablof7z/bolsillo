@@ -1,0 +1,9 @@
+{
+  "content": "This is an UPDATED version of the test collaborative article created during CLI verification. Update #1.",
+  "tags": [
+    ["title", "CLI Test Article - Updated"],
+    ["t", "testing"],
+    ["t", "nip-c1"],
+    ["t", "updated"]
+  ]
+}
