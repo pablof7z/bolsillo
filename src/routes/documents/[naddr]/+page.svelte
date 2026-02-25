@@ -360,9 +360,24 @@
 							<div class="flex items-center gap-4 mb-8 pb-6 border-b border-zinc-800/60">
 								<div class="flex items-center -space-x-2">
 									{#each authorPubkeys as pubkey}
-										<User.Root {ndk} {pubkey}>
-											<User.Avatar class="w-7 h-7 border-2 border-zinc-950 text-[10px] font-medium" />
-										</User.Root>
+										{@const isPending = !confirmedPubkeys.has(pubkey)}
+										<div class="relative" title={isPending ? 'Invite pending' : 'Author'}>
+											<User.Root {ndk} {pubkey}>
+												<User.Avatar
+													class="w-7 h-7 border-2 text-[10px] font-medium {isPending
+														? 'border-amber-500/50 opacity-50 grayscale'
+														: 'border-zinc-950'}"
+												/>
+											</User.Root>
+											{#if isPending}
+												<span class="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-amber-500 rounded-full border border-zinc-950 flex items-center justify-center z-10 pointer-events-none">
+													<svg class="w-2 h-2 text-zinc-950" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3">
+														<circle cx="12" cy="12" r="10" />
+														<polyline points="12 6 12 12 16 14" />
+													</svg>
+												</span>
+											{/if}
+										</div>
 									{/each}
 								</div>
 
@@ -415,8 +430,18 @@
 							{@const confirmed = confirmedPubkeys.has(pubkey)}
 							<div class="flex items-center gap-2 px-1">
 								<User.Root {ndk} {pubkey}>
-									<User.Avatar class="w-6 h-6 text-[8px] shrink-0" />
-									<User.Name class="text-xs text-zinc-400 truncate flex-1 min-w-0" />
+									<div class="relative shrink-0">
+										<User.Avatar class="w-6 h-6 text-[8px] {confirmed ? '' : 'opacity-50 grayscale'}" />
+										{#if !confirmed}
+											<span class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-amber-500 rounded-full border border-zinc-900 flex items-center justify-center pointer-events-none">
+												<svg class="w-1.5 h-1.5 text-zinc-950" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="3">
+													<circle cx="12" cy="12" r="10" />
+													<polyline points="12 6 12 12 16 14" />
+												</svg>
+											</span>
+										{/if}
+									</div>
+									<User.Name class="text-xs {confirmed ? 'text-zinc-400' : 'text-zinc-500'} truncate flex-1 min-w-0" />
 								</User.Root>
 								{#if confirmed}
 									<span class="text-[10px] font-medium text-emerald-400/80 bg-emerald-500/10 px-1.5 py-0.5 rounded shrink-0">
