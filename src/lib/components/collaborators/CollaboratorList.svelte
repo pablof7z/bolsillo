@@ -8,9 +8,15 @@
 		pubkeys: string[];
 		onUpdate: (pubkeys: string[]) => void;
 		disabled?: boolean;
+		/**
+		 * When provided, shows status badges: pubkeys in this set are shown as
+		 * confirmed co-authors; others are shown as "invite pending".
+		 * Omit (undefined) to hide status badges entirely (e.g. during document creation).
+		 */
+		confirmedPubkeys?: Set<string>;
 	}
 
-	let { pubkeys, onUpdate, disabled = false }: Props = $props();
+	let { pubkeys, onUpdate, disabled = false, confirmedPubkeys }: Props = $props();
 
 	let showSearch = $state(false);
 
@@ -56,6 +62,18 @@
 						<User.Nip05 class="text-xs text-zinc-500 truncate block" showVerified={false} />
 					</div>
 				</User.Root>
+
+				{#if confirmedPubkeys !== undefined}
+					{#if confirmedPubkeys.has(pubkey)}
+						<span class="text-[10px] font-medium text-emerald-400/80 bg-emerald-500/10 px-1.5 py-0.5 rounded shrink-0">
+							author
+						</span>
+					{:else}
+						<span class="text-[10px] font-medium text-amber-400/80 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded shrink-0">
+							invite pending
+						</span>
+					{/if}
+				{/if}
 
 				{#if !disabled}
 					<button
