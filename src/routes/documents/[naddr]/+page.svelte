@@ -83,6 +83,31 @@
 	);
 	const isLive = $derived(collabSub.eosed && collab !== null);
 
+	/**
+	 * The address string used as the backlink a-tag value on target events.
+	 * Every version published through this app includes `['a', pointerAddr]`.
+	 */
+	const pointerAddr = $derived(
+		collab ? `${NDKKind.CollaborativeEvent}:${collab.pubkey}:${collab.dTag}` : ''
+	);
+
+	/**
+	 * Pubkeys of collaborators who have actually published a version that
+	 * back-references the pointer event — i.e. confirmed co-authors.
+	 */
+	const confirmedPubkeys = $derived.by(() => {
+		if (!pointerAddr) return new Set<string>();
+		const confirmed = new Set<string>();
+		for (const event of targetSub.events) {
+			const hasBacklink = event.tags.some((t) => t[0] === 'a' && t[1] === pointerAddr);
+			if (hasBacklink) confirmed.add(event.pubkey);
+		}
+		return confirmed;
+	});
+
+	/** Collaborators who have been invited but not yet contributed a version. */
+	const pendingPubkeys = $derived(authorPubkeys.filter((pk) => !confirmedPubkeys.has(pk)));
+
 	/** Kinds whose content should be rendered as markdown rather than plain text. */
 	const MARKDOWN_KINDS = new Set([NDKKind.Article, NDKKind.Wiki, 3023]);
 	const isMarkdownKind = $derived(MARKDOWN_KINDS.has(targetKind));
@@ -342,7 +367,10 @@
 								</div>
 
 								<span class="text-xs text-zinc-500">
-									{authorPubkeys.length} author{authorPubkeys.length !== 1 ? 's' : ''}
+									{confirmedPubkeys.size} author{confirmedPubkeys.size !== 1 ? 's' : ''}
+									{#if pendingPubkeys.length > 0}
+										<span class="text-amber-400/70">· {pendingPubkeys.length} invite{pendingPubkeys.length !== 1 ? 's' : ''} pending</span>
+									{/if}
 								</span>
 
 								{#if displayVersion}
@@ -377,6 +405,33 @@
 
 			<!-- Sidebar: Version History -->
 			<aside class="w-80 border-l border-zinc-800/60 bg-zinc-900/30 hidden lg:block overflow-y-auto">
+				<!-- Contributors -->
+				<div class="p-5 border-b border-zinc-800/60">
+					<h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4">
+						Contributors
+					</h3>
+					<div class="space-y-2">
+						{#each authorPubkeys as pubkey (pubkey)}
+							{@const confirmed = confirmedPubkeys.has(pubkey)}
+							<div class="flex items-center gap-2 px-1">
+								<User.Root {ndk} {pubkey}>
+									<User.Avatar class="w-6 h-6 text-[8px] shrink-0" />
+									<User.Name class="text-xs text-zinc-400 truncate flex-1 min-w-0" />
+								</User.Root>
+								{#if confirmed}
+									<span class="text-[10px] font-medium text-emerald-400/80 bg-emerald-500/10 px-1.5 py-0.5 rounded shrink-0">
+										author
+									</span>
+								{:else}
+									<span class="text-[10px] font-medium text-amber-400/80 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded shrink-0">
+										pending
+									</span>
+								{/if}
+							</div>
+						{/each}
+					</div>
+				</div>
+
 				<div class="p-5">
 					<h3 class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-4">
 						Version History
