@@ -3,6 +3,7 @@ import type { NDKSvelte } from '@nostr-dev-kit/svelte';
 import { ArticleAdapter } from './article';
 import { WikiAdapter } from './wiki';
 import { GenericAdapter } from './generic';
+import { VersionedArticleAdapter } from './versioned-article';
 
 // ── Shared types ──────────────────────────────────────────────
 
@@ -68,6 +69,7 @@ function register(adapter: KindAdapter): void {
 // Pre-register the built-in adapters
 register(new ArticleAdapter());
 register(new WikiAdapter());
+register(new VersionedArticleAdapter());
 
 /** Returns the adapter for a kind, falling back to GenericAdapter. */
 export function getAdapter(kind: number): KindAdapter {
@@ -82,4 +84,4 @@ export function registerAdapter(adapter: KindAdapter): void {
 	register(adapter);
 }
 
-export { ArticleAdapter, WikiAdapter, GenericAdapter };
+export { ArticleAdapter, WikiAdapter, GenericAdapter, VersionedArticleAdapter };

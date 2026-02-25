@@ -84,7 +84,7 @@
 	const isLive = $derived(collabSub.eosed && collab !== null);
 
 	/** Kinds whose content should be rendered as markdown rather than plain text. */
-	const MARKDOWN_KINDS = new Set([NDKKind.Article, NDKKind.Wiki]);
+	const MARKDOWN_KINDS = new Set([NDKKind.Article, NDKKind.Wiki, 3023]);
 	const isMarkdownKind = $derived(MARKDOWN_KINDS.has(targetKind));
 
 	/** Tags that are managed automatically and should not appear in the extra-tags editor. */
@@ -184,6 +184,12 @@
 					<span class="text-[10px] font-medium text-zinc-500 bg-zinc-800/50 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
 						<span>{adapter.icon}</span>
 						{adapter.label}
+					</span>
+				{/if}
+
+				{#if versions.length > 1}
+					<span class="text-[10px] font-medium text-indigo-400/80 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded inline-flex items-center gap-1">
+						{versions.length} versions
 					</span>
 				{/if}
 			</div>
