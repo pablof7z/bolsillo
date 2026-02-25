@@ -98,7 +98,7 @@ export function createProfileFetcher(
             state.profile = fetchedProfile || null;
             state.user = ndkUser;
         } catch (err) {
-            console.error('Failed to fetch profile:', err);
+            // Intentionally silent in production.
             state.profile = null;
             state.user = null;
         }

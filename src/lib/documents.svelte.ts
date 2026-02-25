@@ -105,7 +105,7 @@ export function collabEventsToDocList(
 export function eventToVersion(event: NDKEvent): DocVersion | null {
 	try {
 		if (event.kind == null) {
-			console.warn('eventToVersion: event has no kind, skipping');
+			// Intentionally silent in production.
 			return null;
 		}
 		const adapter = getAdapter(event.kind);
@@ -117,7 +117,7 @@ export function eventToVersion(event: NDKEvent): DocVersion | null {
 			timestamp: event.created_at || 0
 		};
 	} catch (e) {
-		console.warn('Failed to parse event as version:', e);
+		// Intentionally silent in production.
 		return null;
 	}
 }

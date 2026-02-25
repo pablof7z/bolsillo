@@ -10,8 +10,7 @@
 
 	// Subscribe to ALL collaborative pointer events (kind 39382)
 	const pointerSub = ndk.$subscribe(() => ({
-		filters: [{ kinds: [NDKKind.CollaborativeEvent as number] }],
-		skipVerification: true
+		filters: [{ kinds: [NDKKind.CollaborativeEvent as number] }]
 	}));
 
 	// Subscribe to target events for title enrichment
@@ -30,8 +29,7 @@
 		}
 		if (dTags.size === 0 || authors.size === 0) return undefined;
 		return {
-			filters: [{ kinds: [...kinds], authors: [...authors], '#d': [...dTags] }],
-			skipVerification: true
+			filters: [{ kinds: [...kinds], authors: [...authors], '#d': [...dTags] }]
 		};
 	});
 

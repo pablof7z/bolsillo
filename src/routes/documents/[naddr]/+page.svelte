@@ -39,8 +39,7 @@
 	const collabSub = ndk.$subscribe(() => {
 		if (!decoded) return undefined;
 		return {
-			filters: [{ kinds: [decoded.kind], authors: [decoded.pubkey], '#d': [decoded.identifier] }],
-			skipVerification: true
+			filters: [{ kinds: [decoded.kind], authors: [decoded.pubkey], '#d': [decoded.identifier] }]
 		};
 	});
 
@@ -61,8 +60,7 @@
 	const targetSub = ndk.$subscribe(() => {
 		if (!collab?.dTag || authorPubkeys.length === 0) return undefined;
 		return {
-			filters: [{ kinds: [targetKind as number], authors: [...authorPubkeys], '#d': [collab.dTag] }],
-			skipVerification: true
+			filters: [{ kinds: [targetKind as number], authors: [...authorPubkeys], '#d': [collab.dTag] }]
 		};
 	});
 

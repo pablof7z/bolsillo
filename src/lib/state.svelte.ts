@@ -147,7 +147,7 @@ export async function restoreSession(): Promise<void> {
 		switch (method) {
 			case 'nip07': {
 				if (!window.nostr) {
-					console.warn('NIP-07 extension not available, clearing session.');
+					// Intentionally silent in production.
 					clearAuthStorage();
 					return;
 				}
@@ -223,7 +223,7 @@ export async function restoreSession(): Promise<void> {
 			}
 		}
 	} catch (e) {
-		console.warn('Failed to restore session:', e);
+		// Intentionally silent in production.
 		clearAuthStorage();
 	}
 }

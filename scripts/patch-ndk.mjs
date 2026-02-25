@@ -36,27 +36,4 @@ for (const file of filesToPatch) {
   console.log(`[patch-ndk] Patched ${file}`);
 }
 
-// Also patch @noble/curves for nostr-tools compatibility
-const curvesPackageFile = 'node_modules/@noble/curves/package.json';
-if (existsSync(curvesPackageFile)) {
-  const pkg = JSON.parse(readFileSync(curvesPackageFile, 'utf8'));
-  if (!pkg.exports['./esm/secp256k1']) {
-    pkg.exports['./esm/secp256k1'] = { import: './secp256k1.js', default: './secp256k1.js' };
-    pkg.exports['./esm/ed25519'] = { import: './ed25519.js', default: './ed25519.js' };
-    writeFileSync(curvesPackageFile, JSON.stringify(pkg, null, 2));
-    console.log('[patch-ndk] Patched @noble/curves package.json for esm subpath compat');
-  }
-}
-
-// Patch @noble/hashes for sha256 compat
-const hashesPackageFile = 'node_modules/@noble/hashes/package.json';
-if (existsSync(hashesPackageFile)) {
-  const pkg = JSON.parse(readFileSync(hashesPackageFile, 'utf8'));
-  if (!pkg.exports['./sha256']) {
-    pkg.exports['./sha256'] = pkg.exports['./sha2'];
-    writeFileSync(hashesPackageFile, JSON.stringify(pkg, null, 2));
-    console.log('[patch-ndk] Patched @noble/hashes package.json for sha256 compat');
-  }
-}
-
 console.log('[patch-ndk] Done!');
