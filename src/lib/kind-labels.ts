@@ -19,6 +19,7 @@ const KNOWN_KINDS: Record<number, string> = {
 	1111: 'Reply',
 	1222: 'Voice Message',
 	1934: 'Task',
+	3023: 'Versioned Article',
 	30023: 'Article',
 	30818: 'Wiki',
 	30024: 'Draft Article',
@@ -51,6 +52,7 @@ export function isEphemeralKind(kind: number): boolean {
  */
 export const SUGGESTED_KINDS: { kind: number; label: string; icon: string }[] = [
 	{ kind: 30023, label: 'Article', icon: '📝' },
+	{ kind: 3023, label: 'Versioned Article', icon: '📜' },
 	{ kind: 30818, label: 'Wiki Page', icon: '📖' },
 	{ kind: 1, label: 'Short Note', icon: '💬' },
 	{ kind: 30402, label: 'Classified', icon: '🏷️' },
