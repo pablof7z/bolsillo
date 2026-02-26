@@ -4,9 +4,11 @@
 	import { ndk } from '$lib/ndk';
 	import { collabEventsToDocList } from '$lib/documents.svelte';
 	import { logout } from '$lib/state.svelte';
+	import { relayState } from '$lib/relay-store.svelte';
 	import { formatTimestamp } from '$lib/utils';
 	import { getAdapter } from '$lib/adapters';
 	import { User } from '$lib/components/ui';
+	import RelaySelector from '$lib/components/RelaySelector.svelte';
 
 	// Redirect if not logged in
 	$effect(() => {
@@ -16,8 +18,11 @@
 	});
 
 	// Subscribe to ALL collab pointer events (filter client-side for user's docs)
+	// When custom relays are selected, restrict the subscription to those relays.
 	const pointerSub = ndk.$subscribe(() => ({
-		filters: [{ kinds: [NDKKind.CollaborativeEvent as number] }]
+		filters: [{ kinds: [NDKKind.CollaborativeEvent as number] }],
+		relayUrls: relayState.isCustomMode ? relayState.customRelays : undefined,
+		exclusiveRelay: relayState.isCustomMode
 	}));
 
 	// Subscribe to target events for title enrichment
@@ -36,7 +41,9 @@
 		}
 		if (dTags.size === 0 || authors.size === 0) return undefined;
 		return {
-			filters: [{ kinds: [...kinds], authors: [...authors], '#d': [...dTags] }]
+			filters: [{ kinds: [...kinds], authors: [...authors], '#d': [...dTags] }],
+			relayUrls: relayState.isCustomMode ? relayState.customRelays : undefined,
+			exclusiveRelay: relayState.isCustomMode
 		};
 	});
 
@@ -47,7 +54,9 @@
 		const myPointerEvents = pointerSub.events.filter(
 			(e) => e.pubkey === pubkey || e.getMatchingTags('p').some((t) => t[1] === pubkey)
 		);
-		return collabEventsToDocList(myPointerEvents, targetSub.events);
+		// Pass custom relay hints so naddr encodes them for discoverability
+		const hints = relayState.isCustomMode ? relayState.customRelays : undefined;
+		return collabEventsToDocList(myPointerEvents, targetSub.events, hints);
 	});
 </script>
 
@@ -63,6 +72,10 @@
 			</div>
 
 			<div class="flex items-center gap-3">
+				<RelaySelector />
+
+				<div class="h-5 w-px bg-zinc-800"></div>
+
 				<a href="/documents/new" class="btn-primary text-sm flex items-center gap-2">
 					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />

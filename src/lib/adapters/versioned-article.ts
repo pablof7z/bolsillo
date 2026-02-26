@@ -1,4 +1,4 @@
-import { NDKEvent } from '@nostr-dev-kit/ndk';
+import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk';
 import type { NDKSvelte } from '@nostr-dev-kit/svelte';
 import type { EditorField, KindAdapter } from './index';
 
@@ -77,7 +77,7 @@ export class VersionedArticleAdapter implements KindAdapter {
 	 * Publish as a regular (non-replaceable) event so that every version is
 	 * preserved on the relay rather than overwriting the previous one.
 	 */
-	async publishEvent(event: NDKEvent): Promise<void> {
-		await event.publish(undefined, 0);
+	async publishEvent(event: NDKEvent, relaySet?: NDKRelaySet): Promise<void> {
+		await event.publish(relaySet, 0);
 	}
 }

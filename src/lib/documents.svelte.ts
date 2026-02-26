@@ -7,6 +7,7 @@ import { nip19 } from 'nostr-tools';
 import { ndk } from './ndk';
 import { getAdapter } from './adapters';
 import { generateDocId } from './utils';
+import { relayState } from './relay-store.svelte';
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -34,10 +35,14 @@ export interface DocVersion {
 /**
  * Convert collab pointer events + target events into a sorted DocListItem array.
  * Pure function — no fetching.
+ *
+ * @param relayHints - Optional relay URLs to embed in naddr for discoverability.
+ *   When undefined, uses relay-agnostic encoding via collab.encode().
  */
 export function collabEventsToDocList(
 	pointerEvents: NDKEvent[],
-	targetEvents: NDKEvent[]
+	targetEvents: NDKEvent[],
+	relayHints?: string[]
 ): DocListItem[] {
 	// Build target lookup: dTag -> newest event
 	const targetByDTag = new Map<string, NDKEvent>();
@@ -78,12 +83,21 @@ export function collabEventsToDocList(
 			updatedAt = targetEvent.created_at || updatedAt;
 		}
 
+		const naddr = relayHints
+			? nip19.naddrEncode({
+					kind: NDKKind.CollaborativeEvent,
+					pubkey: event.pubkey,
+					identifier: dTag,
+					relays: relayHints
+				})
+			: collab.encode();
+
 		docs.push({
 			id: compositeKey,
 			title,
 			authorCount: collab.authorPubkeys.length || 1,
 			updatedAt,
-			naddr: collab.encode(),
+			naddr,
 			targetKind
 		});
 	}
@@ -139,7 +153,13 @@ export async function publishUpdate(
 	const pointerAddr = `${NDKKind.CollaborativeEvent}:${collab.pubkey}:${collab.dTag}`;
 	event.tags.push(['a', pointerAddr]);
 
-	await adapter.publishEvent(event);
+	// Apply NIP-70 protection and use custom relay set when relays are selected
+	const activeRelaySet = relayState.relaySet;
+	if (relayState.isCustomMode) {
+		event.isProtected = true;
+	}
+
+	await adapter.publishEvent(event, activeRelaySet);
 
 	return {
 		eventId: event.id || '',
@@ -172,6 +192,11 @@ export async function createDocument(
 	const user = await signer.user();
 	const dTag = generateDocId();
 
+	// Snapshot relay state at publish time
+	const activeRelaySet = relayState.relaySet;
+	const isCustom = relayState.isCustomMode;
+	const customRelayUrls = relayState.customRelays;
+
 	// Build the collaborative pointer
 	const collab = new NDKCollaborativeEvent(ndk);
 	collab.dTag = dTag;
@@ -203,6 +228,11 @@ export async function createDocument(
 		collab.tags.push(['p', author.pubkey]);
 	}
 
+	// Apply NIP-70 protection before signing when custom relays are active
+	if (isCustom) {
+		collab.isProtected = true;
+	}
+
 	await collab.sign(signer);
 
 	/*
@@ -218,7 +248,7 @@ export async function createDocument(
 	 * Remove when: NDKCollaborativeEvent exposes a dedicated
 	 *   `publishPointer()` method or the override is refactored.
 	 */
-	await NDKEvent.prototype.publish.call(collab, undefined, undefined, 0);
+	await NDKEvent.prototype.publish.call(collab, activeRelaySet, undefined, 0);
 
 	// Build and publish the initial target event
 	const adapter = getAdapter(targetKind);
@@ -228,8 +258,24 @@ export async function createDocument(
 	const targetEvent = adapter.createEvent(ndk, dTag, fields);
 	const pointerAddr = `${NDKKind.CollaborativeEvent}:${collab.pubkey}:${collab.dTag}`;
 	targetEvent.tags.push(['a', pointerAddr]);
-	await adapter.publishEvent(targetEvent);
 
-	// Encode the pointer naddr for navigation
-	return { naddr: collab.encode(), skippedAuthors };
+	// Apply NIP-70 protection to the target event before publishing
+	if (isCustom) {
+		targetEvent.isProtected = true;
+	}
+
+	await adapter.publishEvent(targetEvent, activeRelaySet);
+
+	// Encode the pointer naddr — embed custom relay hints when in custom relay mode,
+	// otherwise use relay-agnostic encoding via collab.encode()
+	const naddr = isCustom
+		? nip19.naddrEncode({
+				kind: NDKKind.CollaborativeEvent,
+				pubkey: collab.pubkey,
+				identifier: dTag,
+				relays: customRelayUrls
+			})
+		: collab.encode();
+
+	return { naddr, skippedAuthors };
 }

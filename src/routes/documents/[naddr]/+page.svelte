@@ -5,10 +5,12 @@
 	import { nip19 } from 'nostr-tools';
 	import { ndk } from '$lib/ndk';
 	import { eventToVersion, publishUpdate, type DocVersion } from '$lib/documents.svelte';
+	import { relayState } from '$lib/relay-store.svelte';
 	import { formatDate, formatTimestamp } from '$lib/utils';
 	import { getAdapter, type KindAdapter } from '$lib/adapters';
 	import { User } from '$lib/components/ui';
 	import MarkdownContent from '$lib/components/MarkdownContent.svelte';
+	import RelaySelector from '$lib/components/RelaySelector.svelte';
 
 	let editFields = $state<Record<string, string>>({});
 	let isEditing = $state(false);
@@ -39,10 +41,13 @@
 	});
 
 	// Subscribe to the collaborative pointer event
+	// When custom relays are selected, restrict reading to those relays.
 	const collabSub = ndk.$subscribe(() => {
 		if (!decoded) return undefined;
 		return {
-			filters: [{ kinds: [decoded.kind], authors: [decoded.pubkey], '#d': [decoded.identifier] }]
+			filters: [{ kinds: [decoded.kind], authors: [decoded.pubkey], '#d': [decoded.identifier] }],
+			relayUrls: relayState.isCustomMode ? relayState.customRelays : undefined,
+			exclusiveRelay: relayState.isCustomMode
 		};
 	});
 
@@ -60,10 +65,13 @@
 	const adapter: KindAdapter = $derived(getAdapter(targetKind));
 
 	// Subscribe to target event versions for this document
+	// When custom relays are selected, restrict reading to those relays.
 	const targetSub = ndk.$subscribe(() => {
 		if (!collab?.dTag || authorPubkeys.length === 0) return undefined;
 		return {
-			filters: [{ kinds: [targetKind as number], authors: [...authorPubkeys], '#d': [collab.dTag] }]
+			filters: [{ kinds: [targetKind as number], authors: [...authorPubkeys], '#d': [collab.dTag] }],
+			relayUrls: relayState.isCustomMode ? relayState.customRelays : undefined,
+			exclusiveRelay: relayState.isCustomMode
 		};
 	});
 
@@ -245,6 +253,8 @@
 			</div>
 
 			<div class="flex items-center gap-3">
+				<RelaySelector />
+
 				{#if isLive}
 					<span class="inline-flex items-center gap-1.5 text-xs text-emerald-400">
 						<span class="relative flex h-2 w-2">

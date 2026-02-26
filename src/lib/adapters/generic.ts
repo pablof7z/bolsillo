@@ -1,4 +1,4 @@
-import { NDKEvent } from '@nostr-dev-kit/ndk';
+import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk';
 import type { NDKSvelte } from '@nostr-dev-kit/svelte';
 import type { EditorField, KindAdapter } from './index';
 import { kindLabel } from '../kind-labels';
@@ -92,11 +92,11 @@ export class GenericAdapter implements KindAdapter {
 		}
 	}
 
-	async publishEvent(event: NDKEvent): Promise<void> {
+	async publishEvent(event: NDKEvent, relaySet?: NDKRelaySet): Promise<void> {
 		if (this.isAddressable) {
-			await event.publishReplaceable(undefined, undefined, 0);
+			await event.publishReplaceable(relaySet, undefined, 0);
 		} else {
-			await event.publish(undefined, 0);
+			await event.publish(relaySet, 0);
 		}
 	}
 }

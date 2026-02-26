@@ -3,14 +3,19 @@
 	import { ndk } from '$lib/ndk';
 	import { collabEventsToDocList } from '$lib/documents.svelte';
 	import { logout } from '$lib/state.svelte';
+	import { relayState } from '$lib/relay-store.svelte';
 	import { formatTimestamp } from '$lib/utils';
 	import { getAdapter } from '$lib/adapters';
+	import RelaySelector from '$lib/components/RelaySelector.svelte';
 
 	const isLoggedIn = $derived(!!ndk.$currentPubkey);
 
 	// Subscribe to ALL collaborative pointer events (kind 39382)
+	// When custom relays are selected, restrict reading to those relays.
 	const pointerSub = ndk.$subscribe(() => ({
-		filters: [{ kinds: [NDKKind.CollaborativeEvent as number] }]
+		filters: [{ kinds: [NDKKind.CollaborativeEvent as number] }],
+		relayUrls: relayState.isCustomMode ? relayState.customRelays : undefined,
+		exclusiveRelay: relayState.isCustomMode
 	}));
 
 	// Subscribe to target events for title enrichment
@@ -29,12 +34,20 @@
 		}
 		if (dTags.size === 0 || authors.size === 0) return undefined;
 		return {
-			filters: [{ kinds: [...kinds], authors: [...authors], '#d': [...dTags] }]
+			filters: [{ kinds: [...kinds], authors: [...authors], '#d': [...dTags] }],
+			relayUrls: relayState.isCustomMode ? relayState.customRelays : undefined,
+			exclusiveRelay: relayState.isCustomMode
 		};
 	});
 
 	// All documents
-	const allDocuments = $derived(collabEventsToDocList(pointerSub.events, targetSub.events));
+	const allDocuments = $derived(
+		collabEventsToDocList(
+			pointerSub.events,
+			targetSub.events,
+			relayState.isCustomMode ? relayState.customRelays : undefined
+		)
+	);
 
 	// My documents (filtered client-side from the same subscription)
 	const myDocuments = $derived.by(() => {
@@ -43,7 +56,8 @@
 		const myPointerEvents = pointerSub.events.filter(
 			(e) => e.pubkey === pubkey || e.getMatchingTags('p').some((t) => t[1] === pubkey)
 		);
-		return collabEventsToDocList(myPointerEvents, targetSub.events);
+		const hints = relayState.isCustomMode ? relayState.customRelays : undefined;
+		return collabEventsToDocList(myPointerEvents, targetSub.events, hints);
 	});
 </script>
 
@@ -59,7 +73,10 @@
 			</div>
 
 			<div class="flex items-center gap-3">
+				<RelaySelector />
+
 				{#if isLoggedIn}
+					<div class="h-5 w-px bg-zinc-800"></div>
 					<a href="/documents" class="btn-ghost text-sm">My Documents</a>
 					<a href="/documents/new" class="btn-primary text-sm flex items-center gap-2">
 						<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -72,6 +89,7 @@
 						Sign out
 					</button>
 				{:else}
+					<div class="h-5 w-px bg-zinc-800"></div>
 					<a href="/login" class="btn-primary text-sm">Sign in</a>
 				{/if}
 			</div>
