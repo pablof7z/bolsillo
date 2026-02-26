@@ -1,5 +1,4 @@
 import type { NDKUser, NDKUserProfile } from '@nostr-dev-kit/ndk';
-
 import type { NDKSvelte } from '@nostr-dev-kit/svelte';
 import { getNDK } from '../../utils/index.svelte.js';
 
@@ -53,6 +52,9 @@ export function createProfileFetcher(
         loading: false
     });
 
+    // Track active subscription for cleanup
+    let activeSubscription: ReturnType<typeof ndkInstance.subscribe> | null = null;
+
     async function fetchProfile(payload: NDKUser | string) {
         state.loading = true;
 
@@ -62,6 +64,7 @@ export function createProfileFetcher(
                 : payload;
 
             if (!ndkUser) {
+                console.warn('[ProfileFetcher] Failed to create NDKUser for:', payload);
                 state.profile = null;
                 state.user = null;
                 state.loading = false;
@@ -95,6 +98,7 @@ export function createProfileFetcher(
 
             // Fetch profile
             const fetchedProfile = await fetchPromise;
+
             state.profile = fetchedProfile || null;
             state.user = ndkUser;
         } catch (err) {
@@ -108,14 +112,49 @@ export function createProfileFetcher(
 
     $effect(() => {
         const { user } = config();
+
+        // Clean up previous subscription if exists
+        if (activeSubscription) {
+            activeSubscription.stop();
+            activeSubscription = null;
+        }
+
         if (user) {
             fetchProfile(user);
+
+            // Set up subscription to keep profile up to date
+            const pubkey = typeof user === 'string' ? user : user.pubkey;
+
+            activeSubscription = ndkInstance.subscribe(
+                { kinds: [0], authors: [pubkey] },
+                {
+                    closeOnEose: false,
+                    groupable: true,
+                    groupableDelay: 250
+                },
+                (event) => {
+                    try {
+                        const profile = JSON.parse(event.content);
+                        state.profile = profile;
+                    } catch (err) {
+                        console.error('[ProfileFetcher] Failed to parse profile update:', err);
+                    }
+                }
+            );
         } else {
             // Reset state when user becomes falsy
             state.profile = null;
             state.user = null;
             state.loading = false;
         }
+
+        // Cleanup function - called when effect re-runs or component unmounts
+        return () => {
+            if (activeSubscription) {
+                activeSubscription.stop();
+                activeSubscription = null;
+            }
+        };
     });
 
     return {

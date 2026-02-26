@@ -78,19 +78,12 @@ export function collabEventsToDocList(
 			updatedAt = targetEvent.created_at || updatedAt;
 		}
 
-		const naddrData: nip19.AddressPointer = {
-			kind: NDKKind.CollaborativeEvent,
-			pubkey: event.pubkey,
-			identifier: dTag,
-			relays: ['wss://relay.damus.io', 'wss://nos.lol']
-		};
-
 		docs.push({
 			id: compositeKey,
 			title,
 			authorCount: collab.authorPubkeys.length || 1,
 			updatedAt,
-			naddr: nip19.naddrEncode(naddrData),
+			naddr: collab.encode(),
 			targetKind
 		});
 	}
@@ -238,12 +231,5 @@ export async function createDocument(
 	await adapter.publishEvent(targetEvent);
 
 	// Encode the pointer naddr for navigation
-	const naddrData: nip19.AddressPointer = {
-		kind: NDKKind.CollaborativeEvent,
-		pubkey: collab.pubkey,
-		identifier: dTag,
-		relays: ['wss://relay.damus.io', 'wss://nos.lol']
-	};
-
-	return { naddr: nip19.naddrEncode(naddrData), skippedAuthors };
+	return { naddr: collab.encode(), skippedAuthors };
 }
