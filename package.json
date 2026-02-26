@@ -8,7 +8,7 @@
 		"build": "vite build",
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-		"postinstall": "node scripts/patch-ndk.mjs"
+		"postinstall": "node scripts/patch-ndk.mjs && node scripts/patch-blossom-fix.mjs"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-vercel": "^6.0.0",
