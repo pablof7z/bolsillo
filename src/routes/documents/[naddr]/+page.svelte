@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { NDKCollaborativeEvent, NDKKind } from '@nostr-dev-kit/ndk';
+	import NDKBlossom from '@nostr-dev-kit/blossom';
 	import { nip19 } from 'nostr-tools';
 	import { ndk } from '$lib/ndk';
 	import { eventToVersion, publishUpdate, type DocVersion } from '$lib/documents.svelte';
@@ -18,6 +19,7 @@
 	let showVersions = $state(false);
 	let selectedVersionIdx = $state(0);
 	let copySuccess = $state(false);
+	let imageUploading = $state(false);
 
 	// Reset editing state when naddr changes
 	$effect(() => {
@@ -121,7 +123,7 @@
 	const isMarkdownKind = $derived(MARKDOWN_KINDS.has(targetKind));
 
 	/** Tags that are managed automatically and should not appear in the extra-tags editor. */
-	const SYSTEM_TAG_NAMES = new Set(['d', 'a', 'title', 'published_at']);
+	const SYSTEM_TAG_NAMES = new Set(['d', 'a', 'title', 'published_at', 'summary', 'image']);
 
 	/** The actual NDKEvent backing the latest version, used for encoding the naddr. */
 	const latestEvent = $derived(
@@ -161,12 +163,35 @@
 				);
 				fields.tags = customTags.length > 0 ? JSON.stringify(customTags) : '';
 			} else {
-				fields[field.key] = '';
+				// For any other field (e.g. summary, image), read from the event's tags by key name.
+				fields[field.key] = latestEvent?.tagValue(field.key) ?? '';
 			}
 		}
 		editFields = fields;
 		isEditing = true;
 		saveError = '';
+	}
+
+	async function uploadImage(fieldKey: string, e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+
+		imageUploading = true;
+		saveError = '';
+		try {
+			const blossom = new NDKBlossom(ndk);
+			const imeta = await blossom.upload(file);
+			if (imeta.url) {
+				editFields[fieldKey] = imeta.url;
+			}
+		} catch (err) {
+			saveError = err instanceof Error ? err.message : 'Image upload failed';
+		} finally {
+			imageUploading = false;
+			// Reset file input so the same file can be re-selected if needed
+			input.value = '';
+		}
 	}
 
 	function cancelEditing() {
@@ -331,6 +356,44 @@
 											placeholder={field.placeholder}
 											disabled={isSaving}
 										/>
+									</div>
+								{:else if field.type === 'image'}
+									<div>
+										<label for="edit-{field.key}" class="block text-sm font-medium text-zinc-400 mb-2">{field.label}</label>
+										<div class="flex gap-2 items-center">
+											<input
+												id="edit-{field.key}"
+												type="text"
+												bind:value={editFields[field.key]}
+												class="flex-1 bg-transparent text-sm text-zinc-300 placeholder:text-zinc-700 focus:outline-none border-b border-zinc-800 pb-2"
+												placeholder={field.placeholder}
+												disabled={isSaving || imageUploading}
+											/>
+											<label class="btn-ghost text-sm cursor-pointer inline-flex items-center gap-1.5 shrink-0">
+												{#if imageUploading}
+													<svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24">
+														<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+														<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+													</svg>
+													Uploading…
+												{:else}
+													<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+													</svg>
+													Upload
+												{/if}
+												<input
+													type="file"
+													accept="image/*"
+													class="sr-only"
+													disabled={isSaving || imageUploading}
+													onchange={(e) => uploadImage(field.key, e)}
+												/>
+											</label>
+										</div>
+										{#if editFields[field.key]}
+											<img src={editFields[field.key]} alt="Preview" class="mt-3 max-h-40 rounded-lg object-cover border border-zinc-800" />
+										{/if}
 									</div>
 								{:else if field.type === 'textarea'}
 									<div>

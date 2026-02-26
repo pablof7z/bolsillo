@@ -10,7 +10,7 @@ import { VersionedArticleAdapter } from './versioned-article';
 export interface EditorField {
 	key: string;
 	label: string;
-	type: 'text' | 'textarea' | 'number' | 'json' | 'tags';
+	type: 'text' | 'textarea' | 'number' | 'json' | 'tags' | 'image';
 	placeholder?: string;
 	/** If true this field is required to create/update */
 	required?: boolean;

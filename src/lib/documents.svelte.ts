@@ -37,7 +37,7 @@ export interface DocVersion {
  * Pure function — no fetching.
  *
  * @param relayHints - Optional relay URLs to embed in naddr for discoverability.
- *   When undefined, falls back to well-known public relays.
+ *   When undefined, uses relay-agnostic encoding via collab.encode().
  */
 export function collabEventsToDocList(
 	pointerEvents: NDKEvent[],
@@ -67,8 +67,6 @@ export function collabEventsToDocList(
 		}
 	}
 
-	const fallbackRelays = ['wss://relay.damus.io', 'wss://nos.lol'];
-
 	const docs: DocListItem[] = [];
 	for (const [compositeKey, event] of pointerByKey) {
 		const collab = NDKCollaborativeEvent.from(event);
@@ -85,19 +83,21 @@ export function collabEventsToDocList(
 			updatedAt = targetEvent.created_at || updatedAt;
 		}
 
-		const naddrData: nip19.AddressPointer = {
-			kind: NDKKind.CollaborativeEvent,
-			pubkey: event.pubkey,
-			identifier: dTag,
-			relays: relayHints ?? fallbackRelays
-		};
+		const naddr = relayHints
+			? nip19.naddrEncode({
+					kind: NDKKind.CollaborativeEvent,
+					pubkey: event.pubkey,
+					identifier: dTag,
+					relays: relayHints
+				})
+			: collab.encode();
 
 		docs.push({
 			id: compositeKey,
 			title,
 			authorCount: collab.authorPubkeys.length || 1,
 			updatedAt,
-			naddr: nip19.naddrEncode(naddrData),
+			naddr,
 			targetKind
 		});
 	}
@@ -266,14 +266,16 @@ export async function createDocument(
 
 	await adapter.publishEvent(targetEvent, activeRelaySet);
 
-	// Encode the pointer naddr — embed custom relay hints when relays are selected
-	const naddrRelays = isCustom ? customRelayUrls : ['wss://relay.damus.io', 'wss://nos.lol'];
-	const naddrData: nip19.AddressPointer = {
-		kind: NDKKind.CollaborativeEvent,
-		pubkey: collab.pubkey,
-		identifier: dTag,
-		relays: naddrRelays
-	};
+	// Encode the pointer naddr — embed custom relay hints when in custom relay mode,
+	// otherwise use relay-agnostic encoding via collab.encode()
+	const naddr = isCustom
+		? nip19.naddrEncode({
+				kind: NDKKind.CollaborativeEvent,
+				pubkey: collab.pubkey,
+				identifier: dTag,
+				relays: customRelayUrls
+			})
+		: collab.encode();
 
-	return { naddr: nip19.naddrEncode(naddrData), skippedAuthors };
+	return { naddr, skippedAuthors };
 }

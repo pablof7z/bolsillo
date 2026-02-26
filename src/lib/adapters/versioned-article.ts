@@ -24,6 +24,8 @@ export class VersionedArticleAdapter implements KindAdapter {
 
 	readonly editorFields: EditorField[] = [
 		{ key: 'title', label: 'Title', type: 'text', placeholder: 'Untitled article', required: true },
+		{ key: 'summary', label: 'Summary', type: 'text', placeholder: 'Brief description of the article…' },
+		{ key: 'image', label: 'Image', type: 'image', placeholder: 'https://…' },
 		{
 			key: 'content',
 			label: 'Content',
@@ -47,6 +49,8 @@ export class VersionedArticleAdapter implements KindAdapter {
 		// allows them to be retrieved with a '#d' relay filter.
 		event.tags.push(['d', dTag]);
 		if (fields.title) event.tags.push(['title', fields.title]);
+		if (fields.summary) event.tags.push(['summary', fields.summary]);
+		if (fields.image) event.tags.push(['image', fields.image]);
 		event.content = fields.content ?? '';
 		return event;
 	}
@@ -58,6 +62,14 @@ export class VersionedArticleAdapter implements KindAdapter {
 		}
 		if (fields.content !== undefined) {
 			event.content = fields.content;
+		}
+		if (fields.summary !== undefined) {
+			event.removeTag('summary');
+			if (fields.summary) event.tags.push(['summary', fields.summary]);
+		}
+		if (fields.image !== undefined) {
+			event.removeTag('image');
+			if (fields.image) event.tags.push(['image', fields.image]);
 		}
 	}
 
