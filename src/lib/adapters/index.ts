@@ -1,4 +1,4 @@
-import { NDKEvent } from '@nostr-dev-kit/ndk';
+import { NDKEvent, NDKRelaySet } from '@nostr-dev-kit/ndk';
 import type { NDKSvelte } from '@nostr-dev-kit/svelte';
 import { ArticleAdapter } from './article';
 import { WikiAdapter } from './wiki';
@@ -51,8 +51,11 @@ export interface KindAdapter {
 	 */
 	updateEvent(event: NDKEvent, fields: Record<string, string>): void;
 
-	/** Publish an event (replaceable vs regular) */
-	publishEvent(event: NDKEvent): Promise<void>;
+	/**
+	 * Publish an event (replaceable vs regular).
+	 * @param relaySet - Optional relay set to publish to. When undefined, uses NDK defaults.
+	 */
+	publishEvent(event: NDKEvent, relaySet?: NDKRelaySet): Promise<void>;
 
 	/** Describe the editor fields the UI should render for this kind */
 	editorFields: EditorField[];

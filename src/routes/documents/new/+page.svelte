@@ -7,6 +7,7 @@
 	import { getAdapter, type KindAdapter } from '$lib/adapters';
 	import { SUGGESTED_KINDS, isReplaceableKind, isEphemeralKind } from '$lib/kind-labels';
 	import CollaboratorList from '$lib/components/collaborators/CollaboratorList.svelte';
+	import RelaySelector from '$lib/components/RelaySelector.svelte';
 
 	let selectedKind = $state(NDKKind.Article as number);
 	let customKind = $state('');
@@ -103,24 +104,28 @@
 				Back
 			</a>
 
-			<button
-				type="submit"
-				form="create-form"
-				disabled={loading}
-				class="btn-primary text-sm"
-			>
-				{#if loading}
-					<span class="inline-flex items-center gap-2">
-						<svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24">
-							<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
-							<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-						</svg>
-						Publishing…
-					</span>
-				{:else}
-					Create {adapter.label.toLowerCase()}
-				{/if}
-			</button>
+			<div class="flex items-center gap-3">
+				<RelaySelector />
+
+				<button
+					type="submit"
+					form="create-form"
+					disabled={loading}
+					class="btn-primary text-sm"
+				>
+					{#if loading}
+						<span class="inline-flex items-center gap-2">
+							<svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24">
+								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+							</svg>
+							Publishing…
+						</span>
+					{:else}
+						Create {adapter.label.toLowerCase()}
+					{/if}
+				</button>
+			</div>
 		</div>
 	</header>
 

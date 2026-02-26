@@ -1,4 +1,4 @@
-import { NDKArticle, NDKEvent, NDKKind } from '@nostr-dev-kit/ndk';
+import { NDKArticle, NDKEvent, NDKKind, NDKRelaySet } from '@nostr-dev-kit/ndk';
 import type { NDKSvelte } from '@nostr-dev-kit/svelte';
 import type { EditorField, KindAdapter } from './index';
 
@@ -52,7 +52,7 @@ export class ArticleAdapter implements KindAdapter {
 		}
 	}
 
-	async publishEvent(event: NDKEvent): Promise<void> {
-		await event.publishReplaceable(undefined, undefined, 0);
+	async publishEvent(event: NDKEvent, relaySet?: NDKRelaySet): Promise<void> {
+		await event.publishReplaceable(relaySet, undefined, 0);
 	}
 }

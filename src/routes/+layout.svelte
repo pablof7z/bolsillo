@@ -1,11 +1,16 @@
 <script lang="ts">
 	import '../app.css';
 	import { restoreSession } from '$lib/state.svelte';
+	import { initializeRelays } from '$lib/relay-store.svelte';
 
 	let { children } = $props();
 
 	$effect(() => {
 		restoreSession();
+		// Register any stored custom relays with NDK after it is initialized.
+		// Called here (post-mount) rather than at module init time to avoid a
+		// race condition during NDK startup.
+		initializeRelays();
 	});
 </script>
 
