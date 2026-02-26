@@ -14,6 +14,8 @@ export class ArticleAdapter implements KindAdapter {
 
 	readonly editorFields: EditorField[] = [
 		{ key: 'title', label: 'Title', type: 'text', placeholder: 'Untitled article', required: true },
+		{ key: 'summary', label: 'Summary', type: 'text', placeholder: 'Brief description of the article…' },
+		{ key: 'image', label: 'Image', type: 'image', placeholder: 'https://…' },
 		{
 			key: 'content',
 			label: 'Content',
@@ -38,6 +40,8 @@ export class ArticleAdapter implements KindAdapter {
 		article.dTag = dTag;
 		article.title = fields.title ?? '';
 		article.content = fields.content ?? '';
+		if (fields.summary) article.summary = fields.summary;
+		if (fields.image) article.image = fields.image;
 		return article;
 	}
 
@@ -49,6 +53,14 @@ export class ArticleAdapter implements KindAdapter {
 		}
 		if (fields.content !== undefined) {
 			event.content = fields.content;
+		}
+		if (fields.summary !== undefined) {
+			event.removeTag('summary');
+			if (fields.summary) event.tags.push(['summary', fields.summary]);
+		}
+		if (fields.image !== undefined) {
+			event.removeTag('image');
+			if (fields.image) event.tags.push(['image', fields.image]);
 		}
 	}
 

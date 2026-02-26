@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { untrack } from 'svelte';
 	import { NDKKind } from '@nostr-dev-kit/ndk';
+	import NDKBlossom from '@nostr-dev-kit/blossom';
 	import { ndk } from '$lib/ndk';
 	import { createDocument } from '$lib/documents.svelte';
 	import { getAdapter, type KindAdapter } from '$lib/adapters';
@@ -16,6 +17,28 @@
 	let loading = $state(false);
 	let error = $state('');
 	let skippedWarning = $state('');
+	let imageUploading = $state(false);
+
+	async function uploadImage(fieldKey: string, e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+
+		imageUploading = true;
+		error = '';
+		try {
+			const blossom = new NDKBlossom(ndk);
+			const imeta = await blossom.upload(file);
+			if (imeta.url) {
+				fields[fieldKey] = imeta.url;
+			}
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Image upload failed';
+		} finally {
+			imageUploading = false;
+			input.value = '';
+		}
+	}
 
 	const adapter: KindAdapter = $derived(getAdapter(selectedKind));
 
@@ -216,6 +239,43 @@
 								class="input text-lg"
 								disabled={loading}
 							/>
+						{:else if field.type === 'image'}
+							<div class="space-y-2">
+								<div class="flex gap-2 items-center">
+									<input
+										id="field-{field.key}"
+										type="text"
+										bind:value={fields[field.key]}
+										placeholder={field.placeholder}
+										class="input text-sm flex-1"
+										disabled={loading || imageUploading}
+									/>
+									<label class="btn-ghost text-sm cursor-pointer inline-flex items-center gap-1.5 shrink-0">
+										{#if imageUploading}
+											<svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24">
+												<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+												<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+											</svg>
+											Uploading…
+										{:else}
+											<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+											</svg>
+											Upload
+										{/if}
+										<input
+											type="file"
+											accept="image/*"
+											class="sr-only"
+											disabled={loading || imageUploading}
+											onchange={(e) => uploadImage(field.key, e)}
+										/>
+									</label>
+								</div>
+								{#if fields[field.key]}
+									<img src={fields[field.key]} alt="Preview" class="max-h-40 rounded-lg object-cover border border-zinc-800" />
+								{/if}
+							</div>
 						{:else if field.type === 'textarea'}
 							<textarea
 								id="field-{field.key}"
