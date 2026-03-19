@@ -57,6 +57,16 @@ try {
       (match, prefix, rest) => {
         if (!rest.endsWith('.js')) {
           modified = true;
+          // Check if the path points to a directory by resolving it
+          const resolvedPath = join(dirname(filePath), prefix + rest);
+          try {
+            const stats = statSync(resolvedPath);
+            if (stats.isDirectory()) {
+              return `from "${prefix}${rest}/index.js"`;
+            }
+          } catch {
+            // If stat fails, assume it's a file
+          }
           return `from "${prefix}${rest}.js"`;
         }
         return match;
