@@ -171,7 +171,7 @@
 
 			<!-- Kind Picker -->
 			<div class="mb-8">
-				<label class="block text-sm font-medium text-zinc-400 mb-3">Event Kind</label>
+				<div class="block text-sm font-medium text-zinc-400 mb-3">Event Kind</div>
 				<div class="flex flex-wrap gap-2">
 					{#each SUGGESTED_KINDS as sk (sk.kind)}
 						<button
