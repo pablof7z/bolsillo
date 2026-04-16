@@ -43,6 +43,7 @@ export class VersionedArticleAdapter implements KindAdapter {
 	createEvent(ndk: NDKSvelte, dTag: string, fields: Record<string, string>): NDKEvent {
 		const event = new NDKEvent(ndk);
 		event.kind = KIND_VERSIONED_ARTICLE;
+		event.created_at = Math.floor(Date.now() / 1000);
 		// The d tag groups all versions of the same document together and
 		// allows them to be retrieved with a '#d' relay filter.
 		event.tags.push(['d', dTag]);
@@ -64,8 +65,11 @@ export class VersionedArticleAdapter implements KindAdapter {
 	/**
 	 * Publish as a regular (non-replaceable) event so that every version is
 	 * preserved on the relay rather than overwriting the previous one.
+	 *
+	 * Replaceability is determined by the event kind (3023 is non-replaceable),
+	 * not by publish parameters — no relay set or timeout overrides needed.
 	 */
 	async publishEvent(event: NDKEvent): Promise<void> {
-		await event.publish(undefined, 0);
+		await event.publish();
 	}
 }
